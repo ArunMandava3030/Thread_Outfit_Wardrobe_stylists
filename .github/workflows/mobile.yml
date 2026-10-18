@@ -48,7 +48,7 @@ jobs:
         # These versions match Flutter 3.35.7 and Android Gradle Plugin 8.9.1.
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          "$SDKMANAGER" "platforms;android-36" "build-tools;35.0.0" "ndk;27.0.12077973"
+          "$SDKMANAGER" "platforms;android-36" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
 
       - name: Install locked Dart dependencies
         run: flutter pub get --enforce-lockfile

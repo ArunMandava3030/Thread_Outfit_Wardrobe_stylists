@@ -10,7 +10,7 @@ Thread uses one Flutter project for Android, iOS, and the browser. The project i
 
 ## Android demo APK
 
-Install JDK 17 or 21, the Android command-line tools, platform-tools, Android platform 36, build-tools 35.0.0 and 36.0.0, and NDK 27.0.12077973. Review and accept the Android SDK license during setup. Set `ANDROID_HOME` and `JAVA_HOME` to those installations, then run:
+Install JDK 17 or 21, the Android command-line tools, platform-tools, Android platform 36, build-tools 35.0.0 and 36.0.0, NDK 27.0.12077973, and CMake 3.22.1. Review and accept the Android SDK license during setup. Set `ANDROID_HOME` and `JAVA_HOME` to those installations, then run:
 
 ```sh
 flutter pub get
