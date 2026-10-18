@@ -9,6 +9,34 @@ import 'package:thread_style/theme.dart';
 import 'package:thread_style/widgets/photo_analysis_sheet.dart';
 
 void main() {
+  testWidgets(
+    'pants photo samples only the tapped garment with no torso auto estimate',
+    (tester) async {
+      _setPhoneViewport(tester);
+      final bytes = await tester.runAsync(_makeTwoColourPng);
+      PhotoAnalysisResult? result;
+      await _openSheet(
+        tester,
+        bytes: bytes!,
+        garmentLabel: 'pants',
+        onResult: (value) => result = value,
+      );
+      expect(find.text('Find your pants colour'), findsOneWidget);
+      expect(find.text('Auto analyze'), findsNothing);
+      final confirm = find.widgetWithText(
+        FilledButton,
+        'Use this pants colour',
+      );
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+      await _tapPhotoPoint(tester, const Offset(.75, .5));
+      await _tapVisible(tester, confirm);
+      expect(result!.shirtColor!.argb, 0xFFC1926B);
+      expect(result!.skinToneArgb, isNull);
+      expect(result!.bodyShape, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('decoded shirt and skin samples preserve their original colours', (
     tester,
   ) async {
@@ -190,6 +218,7 @@ Future<void> _openSheet(
   required ValueChanged<PhotoAnalysisResult?> onResult,
   bool sampleSkin = false,
   bool measureBody = false,
+  String? garmentLabel,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -207,6 +236,7 @@ Future<void> _openSheet(
                     bytes: bytes,
                     sampleSkin: sampleSkin,
                     measureBody: measureBody,
+                    garmentLabel: garmentLabel,
                   ),
                 );
                 onResult(result);

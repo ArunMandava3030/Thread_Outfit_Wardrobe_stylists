@@ -32,9 +32,12 @@ class _GuestStudio extends StatefulWidget {
 
 class _GuestStudioState extends State<_GuestStudio> {
   final _form = GlobalKey<FormState>();
-  final _results = GlobalKey();
+  final _flow = GlobalKey();
   final _height = TextEditingController();
-  ShirtColor _shirt = ShirtColor.presets.first;
+  StartingPiece _startingPiece = StartingPiece.shirt;
+  ShirtColor _color = ShirtColor.presets.first;
+  ShirtColor? _matchingColor;
+  int _step = 0;
   Occasion _occasion = Occasion.casual;
   StyleDirection _direction = StyleDirection.everyday;
   bool _includeLayer = true;
@@ -50,24 +53,22 @@ class _GuestStudioState extends State<_GuestStudio> {
   void _change(VoidCallback update) => setState(() {
     update();
     _outfits = const [];
+    if (_step == 3) _step = 2;
   });
 
-  void _generate() {
-    if (!_form.currentState!.validate()) return;
-    FocusScope.of(context).unfocus();
-    final height = double.tryParse(_height.text.trim());
-    final candidates = const StyleEngine().generate(
-      shirt: _shirt,
-      occasion: _occasion,
-      profile: StyleProfile(heightCm: height ?? 175),
-      includeLayer: _includeLayer,
-    );
-    setState(() {
-      _heightProvided = height != null;
-      _outfits = const StyleDirectionStylist().adapt(candidates, _direction);
-    });
+  void _changeStartingItem(VoidCallback update) => _change(() {
+    update();
+    _matchingColor = null;
+  });
+
+  void _goTo(int step) {
+    setState(() => _step = step);
+    _scrollToFlow();
+  }
+
+  void _scrollToFlow() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final target = _results.currentContext;
+      final target = _flow.currentContext;
       if (mounted && target != null) {
         Scrollable.ensureVisible(
           target,
@@ -76,6 +77,26 @@ class _GuestStudioState extends State<_GuestStudio> {
         );
       }
     });
+  }
+
+  void _generate() {
+    if (_matchingColor == null || !_form.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
+    final height = double.tryParse(_height.text.trim());
+    final candidates = const StyleEngine().generateForItem(
+      startingPiece: _startingPiece,
+      color: _color,
+      matchingColor: _matchingColor,
+      occasion: _occasion,
+      profile: StyleProfile(heightCm: height ?? 175),
+      includeLayer: _includeLayer,
+    );
+    setState(() {
+      _heightProvided = height != null;
+      _outfits = const StyleDirectionStylist().adapt(candidates, _direction);
+      _step = 3;
+    });
+    _scrollToFlow();
   }
 
   Future<void> _open(String destination) async {
@@ -107,7 +128,7 @@ class _GuestStudioState extends State<_GuestStudio> {
                 children: [
                   _header(),
                   const SizedBox(height: 40),
-                  const Eyebrow('Your shirt. A fresh perspective.'),
+                  const Eyebrow('Your first piece. A fresh perspective.'),
                   const SizedBox(height: 14),
                   Text(
                     'Good outfits\nstart with one color.',
@@ -117,8 +138,9 @@ class _GuestStudioState extends State<_GuestStudio> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Pick the shirt you’re wearing. Discover pants, shoes and '
-                    'layers that work together, wherever you’re headed.',
+                    'Start with your shirt or pants. Choose a color pairing, '
+                    'then tell us your plans. We’ll finish the look with shoes '
+                    'and layers.',
                     style: Theme.of(context).textTheme.bodyLarge,
                   ),
                   const SizedBox(height: 12),
@@ -128,55 +150,57 @@ class _GuestStudioState extends State<_GuestStudio> {
                     style: TextStyle(color: ThreadTheme.muted, height: 1.6),
                   ),
                   const SizedBox(height: 28),
+                  Column(
+                    key: _flow,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [_progress(), const SizedBox(height: 16)],
+                  ),
                   Form(
                     key: _form,
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        if (constraints.maxWidth < 760) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _colorPanel(),
-                              const SizedBox(height: 16),
-                              _occasionPanel(),
-                            ],
-                          );
-                        }
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(child: _colorPanel()),
-                            const SizedBox(width: 20),
-                            Expanded(child: _occasionPanel()),
-                          ],
-                        );
-                      },
-                    ),
+                    child: switch (_step) {
+                      0 => _colorPanel(),
+                      1 => _matchingPanel(),
+                      2 => _occasionPanel(),
+                      _ => const SizedBox.shrink(),
+                    },
                   ),
-                  const SizedBox(height: 20),
-                  FilledButton.icon(
-                    key: const Key('guest_generate'),
-                    onPressed: _generate,
-                    icon: const Icon(Icons.auto_awesome_outlined, size: 20),
-                    label: const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 14),
-                      child: Text('Find my outfits'),
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  if (_outfits.isNotEmpty) ...[
+                  if (_step < 3) ...[const SizedBox(height: 20), _navigation()],
+                  if (_step == 3 && _outfits.isNotEmpty) ...[
                     Column(
-                      key: _results,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Eyebrow('Made for your plans'),
                         const SizedBox(height: 8),
                         Text(
-                          'Three ways to wear ${_shirt.name.toLowerCase()}.',
+                          'Your colors. Three complete looks.',
                           style: Theme.of(context).textTheme.headlineMedium,
                         ),
                         const SizedBox(height: 8),
                         Text('${_occasion.label} · ${_direction.label}'),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${_color.name} ${_startingPiece.itemLabel.toLowerCase()}'
+                          ' + ${_matchingColor!.name} '
+                          '${_startingPiece.matchingItemLabel.toLowerCase()}',
+                        ),
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 8,
+                          children: [
+                            OutlinedButton.icon(
+                              key: const Key('guest_edit_occasion'),
+                              onPressed: () => _goTo(2),
+                              icon: const Icon(Icons.tune_rounded),
+                              label: const Text('Change occasion or layers'),
+                            ),
+                            TextButton(
+                              key: const Key('guest_restart'),
+                              onPressed: () => _goTo(0),
+                              child: const Text('Start with another piece'),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -207,15 +231,15 @@ class _GuestStudioState extends State<_GuestStudio> {
                         );
                       },
                     ),
-                    const SizedBox(height: 28),
                   ],
+                  const SizedBox(height: 28),
                   TrendPanel(
                     onSelected: (direction) {
                       _change(() => _direction = direction);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            '${direction.label} selected. Tap Find my outfits to try it.',
+                            '${direction.label} selected. Finish the outfit steps to try it.',
                           ),
                         ),
                       );
@@ -233,8 +257,9 @@ class _GuestStudioState extends State<_GuestStudio> {
                         ),
                         const SizedBox(height: 8),
                         const Text(
-                          'The full app adds photo analysis, a wardrobe, outfit '
-                          'planning and style preferences. Visit releases for '
+                          'The full app adds favorite outfits, photo analysis, '
+                          'a wardrobe, outfit planning and style preferences. '
+                          'Visit releases for '
                           'available downloads and iPhone installation details.',
                         ),
                         const SizedBox(height: 16),
@@ -290,22 +315,117 @@ class _GuestStudioState extends State<_GuestStudio> {
     ],
   );
 
+  Widget _progress() => Wrap(
+    spacing: 8,
+    runSpacing: 8,
+    children: [
+      for (final (index, label) in [
+        'Start',
+        'Match',
+        'Occasion',
+        'Outfit',
+      ].indexed)
+        Semantics(
+          label: 'Step ${index + 1} of 4: $label',
+          selected: index == _step,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: index == _step ? ThreadTheme.green : ThreadTheme.softGreen,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '${index + 1} · $label',
+              style: TextStyle(
+                color: index == _step ? Colors.white : ThreadTheme.ink,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+    ],
+  );
+
+  Widget _navigation() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      FilledButton.icon(
+        key: Key(_step == 2 ? 'guest_generate' : 'guest_continue'),
+        onPressed: _step == 1 && _matchingColor == null
+            ? null
+            : _step == 2
+            ? _generate
+            : () => _goTo(_step + 1),
+        icon: Icon(
+          _step == 2
+              ? Icons.auto_awesome_outlined
+              : Icons.arrow_forward_rounded,
+          size: 20,
+        ),
+        label: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: Text(switch (_step) {
+            0 =>
+              'Find ${_startingPiece.matchingItemLabel.toLowerCase()} colors',
+            1 => 'Choose the occasion',
+            _ => 'Build my outfits',
+          }, textAlign: TextAlign.center),
+        ),
+      ),
+      if (_step > 0) ...[
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            key: const Key('guest_back'),
+            onPressed: () => _goTo(_step - 1),
+            icon: const Icon(Icons.arrow_back_rounded, size: 18),
+            label: const Text('Back'),
+          ),
+        ),
+      ],
+    ],
+  );
+
   Widget _colorPanel() => SurfaceCard(
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Eyebrow('01 / Start with your shirt'),
+        const Eyebrow('01 / Start with what you have on'),
         const SizedBox(height: 12),
-        Text('Choose a color', style: Theme.of(context).textTheme.titleLarge),
+        Text(
+          'What are you wearing first?',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final item in StartingPiece.values)
+              ChoiceChip(
+                key: Key('guest_start_${item.name}'),
+                label: Text(item.label),
+                selected: _startingPiece == item,
+                onSelected: (_) {
+                  if (_startingPiece != item) {
+                    _changeStartingItem(() => _startingPiece = item);
+                  }
+                },
+              ),
+          ],
+        ),
         Center(
           child: GarmentArt(
-            kind: GarmentKind.shirt,
-            color: Color(_shirt.argb),
+            kind: _startingPiece == StartingPiece.shirt
+                ? GarmentKind.shirt
+                : GarmentKind.pants,
+            color: Color(_color.argb),
             size: 160,
           ),
         ),
         Text(
-          '${_shirt.name} · ${_shirt.hex}',
+          '${_color.name} ${_startingPiece.itemLabel.toLowerCase()} · ${_color.hex}',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.titleMedium,
         ),
@@ -327,11 +447,109 @@ class _GuestStudioState extends State<_GuestStudio> {
                   ),
                 ),
                 label: Text(color.name),
-                selected: _shirt.argb == color.argb,
+                selected: _color.argb == color.argb,
                 showCheckmark: false,
-                onSelected: (_) => _change(() => _shirt = color),
+                onSelected: (_) {
+                  if (_color.argb != color.argb) {
+                    _changeStartingItem(() => _color = color);
+                  }
+                },
               ),
           ],
+        ),
+      ],
+    ),
+  );
+
+  Widget _matchingPanel() {
+    final suggestions = const StyleEngine().matchingColors(
+      startingPiece: _startingPiece,
+      color: _color,
+    );
+    return SurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Eyebrow('02 / Find your color pairing'),
+          const SizedBox(height: 12),
+          Text(
+            '${_startingPiece.matchingItemLabel} colors for your '
+            '${_color.name.toLowerCase()} '
+            '${_startingPiece.itemLabel.toLowerCase()}',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Pick a color you’d like to wear. Next, we’ll choose the shoes '
+            'and layers around your plans.',
+          ),
+          const SizedBox(height: 20),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 24,
+            runSpacing: 12,
+            children: [
+              _garmentPreview(
+                color: _color,
+                kind: _startingPiece == StartingPiece.shirt
+                    ? GarmentKind.shirt
+                    : GarmentKind.pants,
+                label: 'Your ${_startingPiece.itemLabel.toLowerCase()}',
+              ),
+              if (_matchingColor != null)
+                _garmentPreview(
+                  color: _matchingColor!,
+                  kind: _startingPiece == StartingPiece.shirt
+                      ? GarmentKind.pants
+                      : GarmentKind.shirt,
+                  label:
+                      'Your ${_startingPiece.matchingItemLabel.toLowerCase()} choice',
+                ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final color in suggestions)
+                ChoiceChip(
+                  key: Key('guest_match_${color.name}'),
+                  avatar: CircleAvatar(backgroundColor: Color(color.argb)),
+                  label: Text(color.name),
+                  selected: _matchingColor?.argb == color.argb,
+                  showCheckmark: false,
+                  onSelected: (_) => _change(() => _matchingColor = color),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _matchingColor == null
+                ? 'Choose one color to continue.'
+                : '${_matchingColor!.name} selected. Your two colors will stay '
+                      'the same in the finished outfits.',
+            style: const TextStyle(color: ThreadTheme.muted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _garmentPreview({
+    required ShirtColor color,
+    required GarmentKind kind,
+    required String label,
+  }) => SizedBox(
+    width: 145,
+    child: Column(
+      children: [
+        GarmentArt(kind: kind, color: Color(color.argb), size: 120),
+        Text(label, textAlign: TextAlign.center),
+        Text(
+          color.name,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ],
     ),
@@ -341,11 +559,18 @@ class _GuestStudioState extends State<_GuestStudio> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Eyebrow('02 / Make it yours'),
+        const Eyebrow('03 / Dress for your plans'),
         const SizedBox(height: 12),
         Text(
           'Where are you headed?',
           style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          '${_color.name} ${_startingPiece.itemLabel.toLowerCase()} + '
+          '${_matchingColor!.name} '
+          '${_startingPiece.matchingItemLabel.toLowerCase()}',
+          style: const TextStyle(color: ThreadTheme.muted),
         ),
         const SizedBox(height: 16),
         Wrap(
@@ -413,6 +638,17 @@ class _GuestStudioState extends State<_GuestStudio> {
           value: _includeLayer,
           onChanged: (value) => _change(() => _includeLayer = value),
         ),
+        if (_includeLayer &&
+            [
+              Occasion.date,
+              Occasion.party,
+              Occasion.special,
+            ].contains(_occasion))
+          const Text(
+            'We’ll suggest a finishing layer for the occasion. Follow any '
+            'dress code on your invitation.',
+            style: TextStyle(color: ThreadTheme.muted),
+          ),
         if (_occasion == Occasion.bikeRide)
           const Text(
             'Protective motorcycle gear stays included with optional layers off.',
@@ -453,10 +689,17 @@ class GuestOutfitCard extends StatelessWidget {
         const SizedBox(height: 8),
         Text(outfit.description),
         const SizedBox(height: 20),
-        for (final piece in [outfit.pants, outfit.shoes, outfit.layer]) ...[
-          _piece(piece),
-          const SizedBox(height: 14),
-        ],
+        for (final piece in [
+          OutfitPiece(
+            category: 'Top',
+            title: outfit.shirtTitle,
+            colorName: outfit.shirt.name,
+            colorArgb: outfit.shirt.argb,
+          ),
+          outfit.pants,
+          outfit.shoes,
+          outfit.layer,
+        ]) ...[_piece(piece), const SizedBox(height: 14)],
         Theme(
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(

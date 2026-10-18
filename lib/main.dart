@@ -12,6 +12,7 @@ import 'models/style_discovery_models.dart';
 import 'screens/planner_screen.dart';
 import 'screens/wardrobe_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/outfit_rating_screen.dart';
 import 'services/adaptive_stylist.dart';
 import 'services/weather_service.dart';
 import 'services/weather_stylist.dart';
@@ -91,6 +92,9 @@ class _StyleHomeState extends State<StyleHome> {
   int _page = 0;
   int _profileVersion = 0;
   ShirtColor _shirt = ShirtColor.presets.first;
+  StartingPiece _startingPiece = StartingPiece.shirt;
+  ShirtColor? _matchingColor;
+  int _studioStep = 0;
   Occasion _occasion = Occasion.casual;
   Uint8List? _photo;
   List<OutfitRecommendation> _saved = [];
@@ -165,6 +169,7 @@ class _StyleHomeState extends State<StyleHome> {
                 ),
                 for (final (index, title) in [
                   'Shirt color',
+                  'Pants color',
                   'Skin tone',
                   'Body proportions',
                 ].indexed)
@@ -178,15 +183,22 @@ class _StyleHomeState extends State<StyleHome> {
           if (mode == null || !mounted) return;
           final result = await _analyzeBytes(
             bytes,
-            sampleSkin: mode == 1,
-            measureBody: mode == 2,
+            sampleSkin: mode == 2,
+            measureBody: mode == 3,
+            garmentLabel: mode == 1 ? 'pants' : null,
           );
           if (result == null || !mounted) return;
-          if (mode == 0 && result.shirtColor != null) {
+          if ((mode == 0 || mode == 1) && result.shirtColor != null) {
             setState(() {
               _shirt = result.shirtColor!;
               _photo = bytes;
               _generated = false;
+              _outfits = [];
+              _startingPiece = mode == 1
+                  ? StartingPiece.pants
+                  : StartingPiece.shirt;
+              _matchingColor = null;
+              _studioStep = 0;
             });
           } else {
             setState(() {
@@ -235,7 +247,23 @@ class _StyleHomeState extends State<StyleHome> {
     update();
     _generated = false;
     _outfits = [];
+    if (_studioStep == 3) _studioStep = 2;
   });
+
+  void _chooseAnchor(ShirtColor color, {StartingPiece? piece}) {
+    _invalidate(() {
+      _shirt = color;
+      _startingPiece = piece ?? _startingPiece;
+      _matchingColor = null;
+      _photo = null;
+      _studioStep = 0;
+    });
+  }
+
+  void _goToStep(int step) {
+    setState(() => _studioStep = step);
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+  }
 
   Future<Uint8List> _readPhoto(XFile file) async {
     if (await file.length() > 25 * 1024 * 1024) {
@@ -248,6 +276,7 @@ class _StyleHomeState extends State<StyleHome> {
     Uint8List bytes, {
     bool sampleSkin = false,
     bool measureBody = false,
+    String? garmentLabel,
   }) => showModalBottomSheet<PhotoAnalysisResult>(
     context: context,
     isScrollControlled: true,
@@ -257,6 +286,7 @@ class _StyleHomeState extends State<StyleHome> {
       bytes: bytes,
       sampleSkin: sampleSkin,
       measureBody: measureBody,
+      garmentLabel: garmentLabel,
     ),
   );
 
@@ -264,6 +294,9 @@ class _StyleHomeState extends State<StyleHome> {
     bool sampleSkin = false,
     bool measureBody = false,
     ImageSource? source,
+    String? garmentLabel,
+    bool updateStudio = true,
+    ValueChanged<Uint8List>? onPhotoLoaded,
   }) async {
     if (_picking) return null;
     final cameraAvailable =
@@ -318,16 +351,29 @@ class _StyleHomeState extends State<StyleHome> {
       if (file == null || !mounted) return null;
       final bytes = await _readPhoto(file);
       if (!mounted) return null;
+      onPhotoLoaded?.call(bytes);
       final result = await _analyzeBytes(
         bytes,
         sampleSkin: sampleSkin,
         measureBody: measureBody,
+        garmentLabel:
+            garmentLabel ??
+            (!sampleSkin &&
+                    !measureBody &&
+                    _startingPiece == StartingPiece.pants
+                ? 'pants'
+                : null),
       );
       if (!mounted || result == null) return null;
-      if (!sampleSkin && !measureBody && result.shirtColor != null) {
+      if (updateStudio &&
+          !sampleSkin &&
+          !measureBody &&
+          result.shirtColor != null) {
         _invalidate(() {
           _shirt = result.shirtColor!;
           _photo = bytes;
+          _matchingColor = null;
+          _studioStep = 0;
         });
       }
       return result;
@@ -358,6 +404,7 @@ class _StyleHomeState extends State<StyleHome> {
       _profileVersion++;
       _generated = false;
       _outfits = [];
+      if (_studioStep == 3) _studioStep = 2;
     });
     if (saved && mounted) {
       _navigate(0);
@@ -384,6 +431,9 @@ class _StyleHomeState extends State<StyleHome> {
       _generated = false;
       _photo = null;
       _shirt = ShirtColor.presets.first;
+      _startingPiece = StartingPiece.shirt;
+      _matchingColor = null;
+      _studioStep = 0;
       _profileVersion++;
     });
     if (cleared && mounted) {
@@ -471,6 +521,7 @@ class _StyleHomeState extends State<StyleHome> {
       _direction = direction;
       _generated = false;
       _outfits = [];
+      if (_studioStep == 3) _studioStep = 2;
     });
   }
 
@@ -518,9 +569,14 @@ class _StyleHomeState extends State<StyleHome> {
     _invalidate(() {
       _shirt = ShirtColor(name: item.colorName, argb: item.colorArgb);
       _photo = null;
+      _startingPiece = item.category == WardrobeCategory.pants
+          ? StartingPiece.pants
+          : StartingPiece.shirt;
+      _matchingColor = null;
+      _studioStep = 1;
     });
     _navigate(0);
-    _message('Starting with ${item.name}. Choose where you’re going.');
+    _message('Starting with ${item.name}. Choose a matching color next.');
   }
 
   Future<void> _chooseWeather() async {
@@ -545,6 +601,7 @@ class _StyleHomeState extends State<StyleHome> {
         _weather = weather;
         _generated = false;
         _outfits = [];
+        if (_studioStep == 3) _studioStep = 2;
       });
     } on WeatherException catch (error) {
       if (mounted && request == _weatherRequest) _message(error.message);
@@ -566,6 +623,7 @@ class _StyleHomeState extends State<StyleHome> {
       _weatherBusy = false;
       _generated = false;
       _outfits = [];
+      if (_studioStep == 3) _studioStep = 2;
     });
   }
 
@@ -588,7 +646,97 @@ class _StyleHomeState extends State<StyleHome> {
     }
   }
 
+  Future<void> _favoriteFromRating(OutfitRecommendation outfit) async {
+    while (_writeFinished != null) {
+      await _writeFinished!.future;
+    }
+    if (!mounted) throw StateError('The studio was closed.');
+    if (_saved.any((item) => item.id == outfit.id)) return;
+    final next = [outfit, ..._saved];
+    final saved = await _persist(
+      () => widget.store.saveOutfits(next),
+      () => _saved = next,
+    );
+    if (!saved) throw StateError('Could not save this favorite. Try again.');
+  }
+
+  Future<void> _openRating([OutfitRecommendation? outfit]) async {
+    Uint8List? outfitPhoto;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          appBar: AppBar(title: const Text('Rate my outfit')),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 860),
+                  child: OutfitRatingScreen(
+                    profile: _profile,
+                    hasProfile: _configured,
+                    history: _feedback,
+                    savedIds: _saved.map((item) => item.id).toSet(),
+                    initialOutfit: outfit,
+                    onFavorite: _favoriteFromRating,
+                    onPickColor: (label) async {
+                      if (outfitPhoto != null) {
+                        final reuse = await showModalBottomSheet<bool>(
+                          context: context,
+                          showDragHandle: true,
+                          builder: (context) => SafeArea(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                ListTile(
+                                  leading: const Icon(Icons.colorize_outlined),
+                                  title: Text(
+                                    'Sample $label from the same outfit photo',
+                                  ),
+                                  onTap: () => Navigator.pop(context, true),
+                                ),
+                                ListTile(
+                                  leading: const Icon(
+                                    Icons.add_photo_alternate_outlined,
+                                  ),
+                                  title: const Text('Choose another photo'),
+                                  onTap: () => Navigator.pop(context, false),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                        if (reuse == null || !mounted) return null;
+                        if (reuse) {
+                          final sample = await _analyzeBytes(
+                            outfitPhoto!,
+                            garmentLabel: label.toLowerCase(),
+                          );
+                          return sample?.shirtColor;
+                        }
+                      }
+                      final result = await _pickPhoto(
+                        garmentLabel: label.toLowerCase(),
+                        updateStudio: false,
+                        onPhotoLoaded: (bytes) => outfitPhoto = bytes,
+                      );
+                      return result?.shirtColor;
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _generate() async {
+    if (_matchingColor == null) {
+      _goToStep(1);
+      return;
+    }
     if (!_configured) {
       final configure = await showDialog<bool>(
         context: context,
@@ -616,8 +764,10 @@ class _StyleHomeState extends State<StyleHome> {
       }
     }
     setState(() {
-      var candidates = const StyleEngine().generate(
-        shirt: _shirt,
+      var candidates = const StyleEngine().generateForItem(
+        startingPiece: _startingPiece,
+        color: _shirt,
+        matchingColor: _matchingColor,
         occasion: _occasion,
         profile: _profile,
         includeLayer: _includeLayer,
@@ -635,6 +785,7 @@ class _StyleHomeState extends State<StyleHome> {
           ? const WardrobeStylist().rankByOwnership(candidates, _wardrobe)
           : candidates;
       _generated = true;
+      _studioStep = 3;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final resultsContext = _resultsKey.currentContext;
@@ -871,7 +1022,7 @@ class _StyleHomeState extends State<StyleHome> {
                 ),
                 const SizedBox(height: 15),
                 Text(
-                  'Your shirt.\nA whole new look.',
+                  'One piece.\nYour whole outfit.',
                   style: wide
                       ? Theme.of(context).textTheme.displayLarge
                       : Theme.of(context).textTheme.displayMedium,
@@ -891,27 +1042,64 @@ class _StyleHomeState extends State<StyleHome> {
           if (wide) SizedBox(width: 260, child: _profileSummary()),
         ],
       ),
-      const SizedBox(height: 32),
-      if (wide)
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(flex: 11, child: _shirtPanel()),
-            const SizedBox(width: 24),
-            Expanded(flex: 10, child: _occasionPanel()),
-          ],
-        )
-      else ...[
-        _shirtPanel(),
-        const SizedBox(height: 20),
-        _occasionPanel(),
-      ],
+      const SizedBox(height: 16),
+      OutlinedButton.icon(
+        key: const Key('open_outfit_rating'),
+        onPressed: () => _openRating(),
+        icon: const Icon(Icons.star_outline_rounded),
+        label: const Text('Already dressed? Rate my outfit'),
+      ),
+      const SizedBox(height: 24),
+      _studioProgress(),
       const SizedBox(height: 20),
-      _contextPanels(wide),
-      const SizedBox(height: 20),
-      TrendPanel(onSelected: _setDirection),
-      const SizedBox(height: 30),
-      if (_generated) _results() else _howItWorks(),
+      if (_studioStep == 0)
+        _shirtPanel()
+      else if (_studioStep == 1)
+        _matchingPanel()
+      else if (_studioStep == 2)
+        _occasionPanel()
+      else if (_generated)
+        _results(),
+      const SizedBox(height: 18),
+      Wrap(
+        spacing: 12,
+        runSpacing: 10,
+        children: [
+          if (_studioStep > 0)
+            OutlinedButton.icon(
+              key: const Key('studio_back'),
+              onPressed: () => _goToStep(_studioStep - 1),
+              icon: const Icon(Icons.arrow_back_rounded),
+              label: Text(_studioStep == 3 ? 'Edit occasion & layers' : 'Back'),
+            ),
+          if (_studioStep < 2)
+            FilledButton.icon(
+              key: const Key('studio_next'),
+              onPressed: _studioStep == 1 && _matchingColor == null
+                  ? null
+                  : () => _goToStep(_studioStep + 1),
+              icon: const Icon(Icons.arrow_forward_rounded),
+              label: Text(
+                _studioStep == 0
+                    ? 'Find matching ${_startingPiece == StartingPiece.pants ? 'tops' : 'pants'}'
+                    : 'Choose the occasion',
+              ),
+            ),
+        ],
+      ),
+      const SizedBox(height: 22),
+      ExpansionTile(
+        key: const Key('studio_personalization'),
+        tilePadding: EdgeInsets.zero,
+        title: const Text('Style, weather & personal preferences'),
+        subtitle: const Text('Optional extras for your next outfit'),
+        children: [
+          _contextPanels(wide),
+          const SizedBox(height: 16),
+          TrendPanel(onSelected: _setDirection),
+          const SizedBox(height: 16),
+        ],
+      ),
       const SizedBox(height: 30),
       Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -929,6 +1117,103 @@ class _StyleHomeState extends State<StyleHome> {
       ),
     ],
   );
+
+  Widget _studioProgress() => Wrap(
+    spacing: 8,
+    runSpacing: 8,
+    children: [
+      for (final (index, label) in [
+        'Your starting piece',
+        'Matching colors',
+        'The occasion',
+        'Your outfits',
+      ].indexed)
+        ChoiceChip(
+          key: Key('studio_step_$index'),
+          label: Text('${index + 1}. $label'),
+          selected: _studioStep == index,
+          onSelected:
+              (index == 2 && _matchingColor == null) ||
+                  (index == 3 && !_generated)
+              ? null
+              : (_) => _goToStep(index),
+        ),
+    ],
+  );
+
+  Widget _matchingPanel() {
+    final colors = const StyleEngine().matchingColors(
+      startingPiece: _startingPiece,
+      color: _shirt,
+      profile: _profile,
+    );
+    final other = _startingPiece == StartingPiece.pants ? 'top' : 'pants';
+    return SurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Eyebrow('02 / Make the pairing'),
+          const SizedBox(height: 8),
+          Text(
+            'Choose your $other color',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Keeping your ${_shirt.name.toLowerCase()} ${_startingPiece == StartingPiece.pants ? 'pants' : 'shirt'}. Pick a suggested match or another color you love.',
+          ),
+          const SizedBox(height: 20),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              for (final (index, color) in colors.indexed)
+                ChoiceChip(
+                  key: Key('matching_suggestion_$index'),
+                  avatar: CircleAvatar(backgroundColor: Color(color.argb)),
+                  label: Text(color.name),
+                  selected: _matchingColor?.argb == color.argb,
+                  onSelected: (_) => _invalidate(() => _matchingColor = color),
+                ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: const Text('More colors'),
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final color in ShirtColor.presets)
+                    ChoiceChip(
+                      key: Key('matching_color_${color.name}'),
+                      label: Text(color.name),
+                      avatar: CircleAvatar(backgroundColor: Color(color.argb)),
+                      selected: _matchingColor?.argb == color.argb,
+                      onSelected: (_) =>
+                          _invalidate(() => _matchingColor = color),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+          if (_matchingColor != null) ...[
+            const SizedBox(height: 14),
+            Text(
+              '${_matchingColor!.name} $other selected. Next, dress it for your plans.',
+              style: const TextStyle(
+                color: ThreadTheme.green,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 
   Widget _contextPanels(bool wide) {
     final weather = WeatherPanel(
@@ -1099,6 +1384,22 @@ class _StyleHomeState extends State<StyleHome> {
           'What are you wearing?',
           style: Theme.of(context).textTheme.titleLarge,
         ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          children: [
+            for (final piece in StartingPiece.values)
+              ChoiceChip(
+                key: Key('starting_piece_${piece.name}'),
+                label: Text(
+                  piece == StartingPiece.pants ? 'Pants first' : 'Shirt first',
+                ),
+                selected: _startingPiece == piece,
+                onSelected: (_) => _chooseAnchor(_shirt, piece: piece),
+              ),
+          ],
+        ),
         const SizedBox(height: 18),
         Container(
           height: 215,
@@ -1143,7 +1444,9 @@ class _StyleHomeState extends State<StyleHome> {
                   fit: BoxFit.contain,
                   cacheWidth: 700,
                   errorBuilder: (_, error, stack) => GarmentArt(
-                    kind: GarmentKind.shirt,
+                    kind: _startingPiece == StartingPiece.pants
+                        ? GarmentKind.pants
+                        : GarmentKind.shirt,
                     color: Color(_shirt.argb),
                     size: 200,
                   ),
@@ -1152,7 +1455,9 @@ class _StyleHomeState extends State<StyleHome> {
                 Transform.rotate(
                   angle: -.08,
                   child: GarmentArt(
-                    kind: GarmentKind.shirt,
+                    kind: _startingPiece == StartingPiece.pants
+                        ? GarmentKind.pants
+                        : GarmentKind.shirt,
                     color: Color(_shirt.argb),
                     size: 214,
                   ),
@@ -1242,10 +1547,10 @@ class _StyleHomeState extends State<StyleHome> {
         const SizedBox(height: 18),
         Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Text(
-                'Or pick your shirt color',
-                style: TextStyle(fontSize: 12, color: ThreadTheme.muted),
+                'Or pick your ${_startingPiece == StartingPiece.pants ? 'pants' : 'shirt'} color',
+                style: const TextStyle(fontSize: 12, color: ThreadTheme.muted),
               ),
             ),
             Container(
@@ -1275,12 +1580,11 @@ class _StyleHomeState extends State<StyleHome> {
                   child: Semantics(
                     button: true,
                     selected: _shirt.argb == color.argb,
-                    label: '${color.name} shirt',
+                    label:
+                        '${color.name} ${_startingPiece == StartingPiece.pants ? 'pants' : 'shirt'}',
                     child: InkWell(
-                      onTap: () => _invalidate(() {
-                        _shirt = color;
-                        _photo = null;
-                      }),
+                      key: Key('starting_color_${color.name}'),
+                      onTap: () => _chooseAnchor(color),
                       borderRadius: BorderRadius.circular(24),
                       child: SizedBox.square(
                         dimension: 36,
@@ -1343,16 +1647,18 @@ class _StyleHomeState extends State<StyleHome> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Eyebrow('02 / Set the scene'),
+        const Eyebrow('03 / Set the scene'),
         const SizedBox(height: 8),
         Text(
           'Where are you headed?',
           style: Theme.of(context).textTheme.titleLarge,
         ),
         const SizedBox(height: 8),
-        const Text(
-          'A look for wherever the day takes you.',
-          style: TextStyle(fontSize: 12, color: ThreadTheme.muted),
+        Text(
+          '${_shirt.name} ${_startingPiece == StartingPiece.pants ? 'pants' : 'shirt'} + '
+          '${_matchingColor?.name ?? ''} ${_startingPiece == StartingPiece.pants ? 'top' : 'pants'}. '
+          'Now choose where you’ll wear them.',
+          style: const TextStyle(fontSize: 12, color: ThreadTheme.muted),
         ),
         const SizedBox(height: 18),
         LayoutBuilder(
@@ -1489,99 +1795,11 @@ class _StyleHomeState extends State<StyleHome> {
     ),
   );
 
-  Widget _howItWorks() => Container(
-    padding: const EdgeInsets.symmetric(vertical: 25),
-    decoration: const BoxDecoration(
-      border: Border(
-        top: BorderSide(color: ThreadTheme.line),
-        bottom: BorderSide(color: ThreadTheme.line),
-      ),
-    ),
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        final items = [
-          _helpItem(
-            Icons.palette_outlined,
-            'Colors that connect',
-            'Pants, shoes, and layers that work with your shirt.',
-          ),
-          _helpItem(
-            Icons.accessibility_new_outlined,
-            'A fit that feels right',
-            'Small adjustments for your height and proportions.',
-          ),
-          _helpItem(
-            Icons.bookmark_border_rounded,
-            'Keep the good ones',
-            'Save the looks you love for another day.',
-          ),
-        ];
-        return constraints.maxWidth > 650
-            ? Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: items.map((item) => Expanded(child: item)).toList(),
-              )
-            : Column(
-                children: [
-                  for (var i = 0; i < items.length; i++)
-                    Padding(
-                      padding: EdgeInsets.only(
-                        bottom: i == items.length - 1 ? 0 : 22,
-                      ),
-                      child: items[i],
-                    ),
-                ],
-              );
-      },
-    ),
-  );
-
-  Widget _helpItem(IconData icon, String title, String subtitle) => Padding(
-    padding: const EdgeInsets.only(right: 18),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: ThreadTheme.softGreen,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, size: 20, color: ThreadTheme.green),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: const TextStyle(
-                  fontSize: 11,
-                  height: 1.5,
-                  color: ThreadTheme.muted,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-
   Widget _results() => Column(
     key: _resultsKey,
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Eyebrow('03 / Your outfit edit'),
+      const Eyebrow('04 / Finish & favorite'),
       const SizedBox(height: 10),
       Text(
         'A few ways to wear it.',
@@ -1589,7 +1807,8 @@ class _StyleHomeState extends State<StyleHome> {
       ),
       const SizedBox(height: 8),
       Text(
-        '${_shirt.name} shirt. ${_occasion.label}. Three takes, picked for you.',
+        '${_shirt.name} ${_startingPiece == StartingPiece.pants ? 'pants' : 'shirt'}. '
+        '${_occasion.label}. Favorite a finished look or rate it for more advice.',
         style: const TextStyle(fontSize: 13, color: ThreadTheme.muted),
       ),
       const SizedBox(height: 22),
@@ -1620,6 +1839,7 @@ class _StyleHomeState extends State<StyleHome> {
                 feedback: _voteFor(outfit),
                 onFeedback: _writing ? null : (vote) => _vote(outfit, vote),
                 onPlan: () => _plan(outfit),
+                onRate: () => _openRating(outfit),
                 wardrobeMatches: _wardrobe.isEmpty
                     ? null
                     : const WardrobeStylist().coverage(outfit, _wardrobe),

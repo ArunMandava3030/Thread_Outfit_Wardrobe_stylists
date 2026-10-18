@@ -1,10 +1,10 @@
 # Thread
 
-A Flutter outfit companion for a men's wardrobe. Start with your shirt color, choose where you're going, and get three coordinated combinations of pants, shoes, and optional layers. Personalize future recommendations with likes and dislikes, explore open style guides, dress for current weather, and organize your wardrobe and outfit plans.
+A Flutter outfit companion for a men's wardrobe. Start with the shirt or pants you are already wearing, choose a complementary color, then dress the pairing for your occasion. Compare three finishing options, favorite a look, or rate an outfit you are wearing with an explained 0–5 styling estimate. Personalize recommendations with likes and dislikes, explore style guides and headlines, dress for current weather, and organize your wardrobe and outfit plans.
 
 [Try the web preview](https://arunmandava3030.github.io/Thread_Outfit_Wardrobe_stylists/) · [Android downloads](https://github.com/ArunMandava3030/Thread_Outfit_Wardrobe_stylists/releases) · [Mobile build guide](docs/mobile-builds.md)
 
-The public preview offers shirt colors, occasions, optional height, style directions, pants, shoes and layers, plus recent style headlines. It works without an account or browser storage; choices reset on reload. The Android app includes the full local profile, adaptive learning, photo analysis, weather, wardrobe and planner. iPhone users can use the preview in Safari and add it to the Home Screen while Apple signing is arranged.
+The public preview offers the same shirt-first or pants-first guided flow, occasions, optional height, style directions, pants, shoes and layers, plus recent style headlines. It works without an account or browser storage; choices reset on reload. The Android app adds outfit ratings, persistent favorites, a local profile, adaptive learning, photo analysis, weather, wardrobe and planner. iPhone users can use the preview in Safari and add it to the Home Screen while Apple signing is arranged.
 
 ## Run locally
 
@@ -26,15 +26,22 @@ Then open http://127.0.0.1:8080. Flutter 3.35.7 / Dart 3.9.2 was used here. Comm
 
 ## Using the app
 
-1. Add a camera/gallery photo for an automatic shirt-color estimate. Check the marked sample and tap to correct it before confirming, or choose a color swatch.
-2. Pick **Office**, **Date night**, **Casual outing**, **Beach day**, or **Bike ride** and turn optional layering on or off.
-3. Add your height in centimeters or inches. You can explore color combinations before configuring your profile; that uses a clearly disclosed 175 cm default.
-4. Optionally choose/sample a skin tone and select a known undertone. For proportions, choose a description, review an automatic shoulder-to-hip guide, or mark both shoulder, waist, and hip edges in a front-facing photo.
-5. Choose **Everyday**, **Smart casual**, **Streetwear**, **Athleisure**, or **Preppy**. **Explore styles** loads optional Wikipedia introductions with links to the original articles.
-6. Choose a city to adjust fabrics, shoes and layers to current weather. Weather is optional; local outfit generation works without a connection.
-7. Generate three looks. Open **Why it works** for palette reasoning and fit advice, copy outfit details, bookmark a look, or give it a like/dislike to personalize the next recommendations.
-8. Add clothing in **Wardrobe**, use **Wear this shirt** to start an outfit, and optionally prioritize your wardrobe colors. Use **Plan look** to save an outfit for a date and add a note; manage upcoming and past plans in **Planner**.
-9. Select **Check latest headlines** in **Recent style headlines** to see dated fashion coverage and open its original sources. Suggested style directions can be applied to your next outfit.
+1. Choose **Shirt first** or **Pants first** and set the color of the piece you are keeping. Shirt photos retain automatic torso sampling with manual correction. Pants photos use an explicit tap on the pants so a torso sample is never mistaken for trousers. Color swatches are always available.
+2. Choose a suggested complementary top/pants color, or open **More colors**. Continue to the occasion after selecting a match. Back navigation retains your choices; changing the starting item clears the previous pairing.
+3. Choose **Office**, **Date night**, **Party**, **Special occasion**, **Casual outing**, **Beach day**, or **Bike ride**, and choose whether to add a layer. Generate three finishing options. Both selected colors and the garment you are keeping stay fixed when style or weather changes.
+4. Use **Favorite outfit** to keep the finished look in **Saved looks**. Existing bookmarks, profiles, votes, wardrobe entries and plans remain compatible with this update. You can also plan the outfit or give a like/dislike to teach future recommendations.
+5. Select **Already dressed? Rate my outfit**, or **Rate this outfit** on a suggestion. Confirm the actual garment types and colors, occasion and optional fit observations, then review the rating and suggested improvements. Photos can supply individual garment colors; the same outfit photo can be reused for multiple samples.
+6. Add your height in centimeters or inches under **My profile**. Optionally choose/sample a skin tone and select a known undertone. For proportions, use the automatic shoulder-to-hip guide, choose a description, or mark shoulder, waist and hip edges. These existing profile tools remain available. Skipping the profile during generation uses a disclosed 175 cm default.
+7. Open **Style, weather & personal preferences** for style directions, optional Wikipedia introductions, current city weather and dated fashion headlines. These extras do not interrupt the guided pairing flow.
+8. In **Wardrobe**, use **Wear this shirt** or **Wear these pants** to start from an owned item. **Plan look** stores an outfit for a date and an optional note; **Planner** manages these snapshots.
+
+## Outfit ratings
+
+The 0–5 result is a subjective styling estimate, not a validated prediction or an assessment of appearance or body quality. It scores selected color coordination and occasion/dress-code suitability. Optional comfort, hem clearance and preferred-silhouette observations add a fit component; measurements alone cannot establish whether a garment fits. Garment types must be confirmed by the user—photo color sampling does not recognize every item or its fit.
+
+The rule score uses color coordination (45%), occasion (40%) and observed fit (15%); when fit is unknown, the first two weights are renormalized. The existing local preference model can adjust the result by at most ±0.25 points, with reduced influence when there are few votes. Top garment words are now included in its clothing features. Skin tone, shoulder proportions and height provide optional, constructive palette/fit advice and do not lower the numeric score.
+
+If enabled, a snapshot refreshed within 48 hours can contribute +0.10 for a headline from the last 30 days whose keyword style matches the selected direction and compatible garment categories. The source and date are shown. This is a small discovery signal, not a popularity measure or recognition of the pictured clothing. Missing, stale or unrelated headlines cause no penalty. Every result shows its components and practical changes; changing an input invalidates the old result before another rating is made.
 
 ## Recent trends and the public preview
 

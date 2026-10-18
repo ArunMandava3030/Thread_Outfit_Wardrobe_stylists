@@ -52,7 +52,7 @@ class _WardrobeScreenState extends State<WardrobeScreen> {
         ),
         const SizedBox(height: 12),
         const Text(
-          'Add your everyday pieces. Wear a shirt to start a look, or use your wardrobe colors to sort outfit ideas.',
+          'Add your everyday pieces. Start a look with a shirt or pants, or use your wardrobe colors to sort outfit ideas.',
         ),
         const SizedBox(height: 20),
         FilledButton.icon(
@@ -191,12 +191,17 @@ class _WardrobeCard extends StatelessWidget {
           '${item.colorName} · ${item.hex}',
           style: const TextStyle(color: ThreadTheme.muted),
         ),
-        if (item.category == WardrobeCategory.shirt) ...[
+        if (item.category == WardrobeCategory.shirt ||
+            item.category == WardrobeCategory.pants) ...[
           const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: onWear,
             icon: const Icon(Icons.checkroom_outlined, size: 18),
-            label: const Text('Wear this shirt'),
+            label: Text(
+              item.category == WardrobeCategory.pants
+                  ? 'Wear these pants'
+                  : 'Wear this shirt',
+            ),
           ),
         ],
       ],

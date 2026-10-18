@@ -20,7 +20,7 @@ void main() {
         initial: const StoredStyle(configured: true),
       );
       await _pumpApp(tester, store: store, size: const Size(390, 844));
-      await _tapVisible(tester, find.byKey(const Key('generate_outfits')));
+      await _generate(tester);
       final liked = tester
           .widget<OutfitCard>(find.byType(OutfitCard).first)
           .outfit;
@@ -28,8 +28,9 @@ void main() {
       expect(store.snapshot.feedback.single.outfit.id, liked.id);
       expect(store.snapshot.feedback.single.feedback, StyleFeedback.like);
       await _restartApp(tester, store);
+      await _openPersonalization(tester);
       expect(find.text('1 style preference learned.'), findsOneWidget);
-      await _tapVisible(tester, find.byKey(const Key('generate_outfits')));
+      await _generate(tester);
       final restored = tester.widget<OutfitCard>(
         find.byWidgetPredicate(
           (widget) => widget is OutfitCard && widget.outfit.id == liked.id,
@@ -63,7 +64,7 @@ void main() {
         initial: const StoredStyle(configured: true),
       );
       await _pumpApp(tester, store: store, size: const Size(390, 844));
-      await _tapVisible(tester, find.byKey(const Key('generate_outfits')));
+      await _generate(tester);
       final outfit = tester
           .widget<OutfitCard>(find.byType(OutfitCard).first)
           .outfit;
@@ -118,8 +119,8 @@ void main() {
       await _tapVisible(tester, find.text('Wardrobe'));
       expect(find.text('My navy linen shirt'), findsOneWidget);
       await _tapVisible(tester, find.text('Wear this shirt'));
-      expect(find.text('Your shirt.\nA whole new look.'), findsOneWidget);
-      await _tapVisible(tester, find.byKey(const Key('generate_outfits')));
+      expect(find.text('One piece.\nYour whole outfit.'), findsOneWidget);
+      await _generate(tester);
       expect(
         tester
             .widgetList<OutfitCard>(find.byType(OutfitCard))
@@ -211,11 +212,11 @@ void main() {
       final store = _MemoryStyleStore();
       await _pumpApp(tester, store: store, size: const Size(390, 844));
 
-      expect(find.text('Your shirt.\nA whole new look.'), findsOneWidget);
+      expect(find.text('One piece.\nYour whole outfit.'), findsOneWidget);
       expect(find.byType(OutfitCard), findsNothing);
       expect(tester.takeException(), isNull);
 
-      await _tapVisible(tester, find.byKey(const Key('generate_outfits')));
+      await _generate(tester);
       expect(find.text('What’s your height?'), findsOneWidget);
       await _tapVisible(tester, find.text('Add my height'));
 
@@ -235,10 +236,10 @@ void main() {
       expect(store.profileWrites, 1);
       expect(store.snapshot.configured, isTrue);
       expect(store.snapshot.profile.heightCm, 182);
-      expect(find.text('Your shirt.\nA whole new look.'), findsOneWidget);
+      expect(find.text('One piece.\nYour whole outfit.'), findsOneWidget);
       expect(find.text('Tailored to your 182 cm profile'), findsOneWidget);
 
-      await _tapVisible(tester, find.byKey(const Key('generate_outfits')));
+      await _generate(tester);
       expect(find.byType(OutfitCard), findsNWidgets(3));
       expect(find.text('A few ways to wear it.'), findsOneWidget);
       final firstLook = tester.widget<OutfitCard>(
@@ -264,6 +265,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.pumpWidget(ThreadApp(store: store));
       await tester.pumpAndSettle();
+      await _prepareOccasion(tester);
       expect(find.text('Tailored to your 182 cm profile'), findsOneWidget);
       await _tapVisible(tester, find.text('Saved looks'));
 
@@ -318,8 +320,9 @@ void main() {
           reason: 'Studio must fit the viewport.',
         );
 
+        await _prepareOccasion(tester);
         await _tapVisible(tester, find.byKey(const Key('occasion_office')));
-        await _tapVisible(tester, find.byKey(const Key('generate_outfits')));
+        await _generate(tester);
         expect(find.byType(OutfitCard), findsNWidgets(3));
         expect(
           tester
@@ -404,6 +407,28 @@ Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
   expect(finder.hitTestable(), findsOneWidget);
   await tester.tap(finder);
   await tester.pumpAndSettle();
+}
+
+Future<void> _prepareOccasion(WidgetTester tester) async {
+  if (find.byKey(const Key('generate_outfits')).evaluate().isNotEmpty) return;
+  if (find.byType(OutfitCard).evaluate().isNotEmpty) {
+    await _tapVisible(tester, find.byKey(const Key('studio_step_2')));
+    return;
+  }
+  if (find.byKey(const Key('starting_piece_shirt')).evaluate().isNotEmpty) {
+    await _tapVisible(tester, find.byKey(const Key('studio_next')));
+  }
+  await _tapVisible(tester, find.byKey(const Key('matching_suggestion_0')));
+  await _tapVisible(tester, find.byKey(const Key('studio_next')));
+}
+
+Future<void> _generate(WidgetTester tester) async {
+  await _prepareOccasion(tester);
+  await _tapVisible(tester, find.byKey(const Key('generate_outfits')));
+}
+
+Future<void> _openPersonalization(WidgetTester tester) async {
+  await _tapVisible(tester, find.text('Style, weather & personal preferences'));
 }
 
 /// Implements the public store contract without creating platform preferences.

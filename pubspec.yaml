@@ -1,7 +1,7 @@
 name: thread_style
 description: A personal outfit companion that starts with the shirt you are wearing.
 publish_to: none
-version: 1.1.0+2
+version: 1.2.0+3
 
 environment:
   sdk: '>=3.8.0 <4.0.0'

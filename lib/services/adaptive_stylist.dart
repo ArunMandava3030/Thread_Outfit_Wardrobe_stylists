@@ -150,6 +150,7 @@ class AdaptiveStylist {
     _colorFeatures(base, 'pants', outfit.pants.colorArgb);
     _colorFeatures(base, 'shoes', outfit.shoes.colorArgb);
     _garmentFeatures(base, 'pants', outfit.pants.title);
+    _garmentFeatures(base, 'top', outfit.shirtTitle);
     _garmentFeatures(base, 'shoes', outfit.shoes.title);
     if (hasLayer) {
       _colorFeatures(base, 'layer', outfit.layer.colorArgb);

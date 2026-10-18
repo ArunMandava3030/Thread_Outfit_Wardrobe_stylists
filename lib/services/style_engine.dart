@@ -5,6 +5,105 @@ import '../models/style_models.dart';
 class StyleEngine {
   const StyleEngine();
 
+  /// Color pairings depend on the actual sampled RGB value, so a camera color
+  /// and the same hand-picked color produce the same suggestions.
+  List<ShirtColor> matchingColors({
+    required StartingPiece startingPiece,
+    required ShirtColor color,
+    StyleProfile? profile,
+  }) {
+    final matches = _palettesFor(color)
+        .map(
+          (palette) =>
+              ShirtColor(name: palette.pants.name, argb: palette.pants.argb),
+        )
+        .toList();
+    // Only tops sit beside the face. Opt-in contrast preferences can reorder
+    // these options, but never exclude a color or change a user's selection.
+    if (startingPiece == StartingPiece.pants &&
+        profile != null &&
+        profile.useSkinTone &&
+        profile.skinToneArgb != null) {
+      final skin = _Rgb(profile.skinToneArgb!);
+      final indexed = matches.indexed.toList();
+      indexed.sort((a, b) {
+        final aContrast = (skin.lightness - _Rgb(a.$2.argb).lightness).abs();
+        final bContrast = (skin.lightness - _Rgb(b.$2.argb).lightness).abs();
+        final comparison = bContrast.compareTo(aContrast);
+        return comparison == 0 ? a.$1.compareTo(b.$1) : comparison;
+      });
+      return List.unmodifiable(indexed.map((entry) => entry.$2));
+    }
+    return List.unmodifiable(matches);
+  }
+
+  /// Build around the item already being worn. Explicit top and trouser colors
+  /// stay fixed; the three results offer different shoes, layers and silhouettes.
+  List<OutfitRecommendation> generateForItem({
+    required StartingPiece startingPiece,
+    required ShirtColor color,
+    ShirtColor? matchingColor,
+    required Occasion occasion,
+    required StyleProfile profile,
+    bool includeLayer = true,
+  }) {
+    final matches = matchingColors(
+      startingPiece: startingPiece,
+      color: color,
+      profile: profile,
+    );
+    return List.unmodifiable(
+      List.generate(3, (index) {
+        final match = matchingColor ?? matches[index];
+        final top = startingPiece == StartingPiece.shirt ? color : match;
+        final bottom = startingPiece == StartingPiece.pants ? color : match;
+        final base = generate(
+          shirt: top,
+          occasion: occasion,
+          profile: profile,
+          includeLayer: includeLayer,
+        )[index];
+        final anchoredPants = startingPiece == StartingPiece.pants;
+        final pants = OutfitPiece(
+          category: 'Pants',
+          title: anchoredPants ? 'Your pants' : base.pants.title,
+          colorName: bottom.name,
+          colorArgb: bottom.argb,
+        );
+        final shirtTitle = anchoredPants
+            ? _topTitles[occasion]![index]
+            : 'Your shirt';
+        final reasons = <String>[
+          anchoredPants
+              ? '${top.name} on top pairs with the ${bottom.name.toLowerCase()} pants you are keeping.'
+              : '${bottom.name} pants pair with the ${top.name.toLowerCase()} shirt you are keeping.',
+          ...base.reasons.skip(1),
+          if (matchingColor != null)
+            'Your selected top and pants colors stay the same across these finishing options.',
+          if (anchoredPants && occasion == Occasion.bikeRide)
+            'Keep these pants only if they are certified motorcycle trousers; the color alone does not tell us whether they offer riding protection.',
+        ];
+        return OutfitRecommendation(
+          id: '${base.id}-from-${startingPiece.name}-${bottom.hex.substring(1)}',
+          title: base.title,
+          description: anchoredPants
+              ? 'Keep your ${bottom.name.toLowerCase()} pants and finish the look for your ${occasion.label.toLowerCase()}.'
+              : base.description,
+          occasion: occasion,
+          shirt: top,
+          shirtTitle: shirtTitle,
+          startingPiece: startingPiece,
+          pants: pants,
+          shoes: base.shoes,
+          layer: base.layer,
+          reasons: List.unmodifiable(reasons),
+          fitAdvice: base.fitAdvice,
+          safetyNote: base.safetyNote,
+        );
+      }),
+    );
+  }
+
   List<OutfitRecommendation> generate({
     required ShirtColor shirt,
     required Occasion occasion,
@@ -183,6 +282,10 @@ class StyleEngine {
       'Tailored separates and closed shoes work for a smart-casual office; follow your workplace dress code.',
     Occasion.date =>
       'Clean lines and a little texture make this feel considered for a dinner or a relaxed date.',
+    Occasion.party =>
+      'A textured top, polished shoes and an optional statement layer suit an evening party; check the venue dress code.',
+    Occasion.special =>
+      'A crisp top, tailored layer and polished shoes suit a celebration or important event; follow the invitation dress code, especially for formal or black-tie events.',
     Occasion.casual =>
       'Easy trousers and comfortable shoes keep the outfit relaxed for an everyday outing.',
     Occasion.beach =>
@@ -367,6 +470,52 @@ const _silhouettes = <Occasion, List<_Silhouette>>{
       'Lightweight bomber',
     ),
   ],
+  Occasion.party: [
+    _Silhouette(
+      'Ready to celebrate',
+      'Evening texture with a polished finish.',
+      'Pleated tailored trousers',
+      'Leather loafers',
+      'Textured evening blazer',
+    ),
+    _Silhouette(
+      'A little after dark',
+      'Relaxed structure for music, dinner and dancing.',
+      'Straight-leg tailored trousers',
+      'Leather Chelsea boots',
+      'Lightweight suede-look bomber',
+    ),
+    _Silhouette(
+      'The evening edit',
+      'Simple separates with one considered extra layer.',
+      'Relaxed pleated trousers',
+      'Polished leather derbies',
+      'Fine-gauge textured cardigan',
+    ),
+  ],
+  Occasion.special: [
+    _Silhouette(
+      'For the occasion',
+      'Tailoring for a celebration or important event.',
+      'Tailored dress trousers',
+      'Polished leather oxfords',
+      'Tailored single-breasted blazer',
+    ),
+    _Silhouette(
+      'A considered entrance',
+      'Softer tailoring with a deliberate finish.',
+      'Pleated dress trousers',
+      'Polished leather derbies',
+      'Softly structured blazer',
+    ),
+    _Silhouette(
+      'Keep it timeless',
+      'Clean lines for the moments that matter.',
+      'Straight-leg dress trousers',
+      'Leather dress loafers',
+      'Textured tailored blazer',
+    ),
+  ],
   Occasion.casual: [
     _Silhouette(
       'Your everyday, elevated',
@@ -435,5 +584,35 @@ const _silhouettes = <Occasion, List<_Silhouette>>{
       'Protective motorcycle boots',
       'Certified armored motorcycle jacket',
     ),
+  ],
+};
+
+const _topTitles = <Occasion, List<String>>{
+  Occasion.office: ['Oxford shirt', 'Fine-knit polo', 'Button-down shirt'],
+  Occasion.date: ['Textured shirt', 'Fine-knit polo', 'Open-collar shirt'],
+  Occasion.party: [
+    'Textured evening shirt',
+    'Fine-knit polo',
+    'Open-collar shirt',
+  ],
+  Occasion.special: [
+    'Crisp dress shirt',
+    'Tailored cotton shirt',
+    'Dress shirt',
+  ],
+  Occasion.casual: [
+    'Cotton T-shirt',
+    'Relaxed polo',
+    'Casual button-down shirt',
+  ],
+  Occasion.beach: [
+    'Linen shirt',
+    'Breathable cotton T-shirt',
+    'Relaxed linen shirt',
+  ],
+  Occasion.bikeRide: [
+    'Comfortable base layer',
+    'Breathable base layer',
+    'Comfortable base layer',
   ],
 };

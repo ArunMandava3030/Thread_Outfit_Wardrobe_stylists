@@ -70,7 +70,9 @@ class WeatherStylist {
         var layer = includeLayer ? outfit.layer : _noLayer;
         final polished =
             outfit.occasion == Occasion.office ||
-            outfit.occasion == Occasion.date;
+            outfit.occasion == Occasion.date ||
+            outfit.occasion == Occasion.party ||
+            outfit.occasion == Occasion.special;
         final notes = <String>[];
         if (wet) {
           pants = _rename(
@@ -159,6 +161,13 @@ class WeatherStylist {
                 : cold
                 ? 'a warm layer'
                 : 'a wind layer'} if you will be outdoors.',
+          );
+        }
+
+        if (outfit.startingPiece == StartingPiece.pants) {
+          pants = outfit.pants;
+          notes.add(
+            'Your pants stay as selected. Check whether their fabric is comfortable for these conditions; weather tips are options to consider, not a change to the item you are wearing.',
           );
         }
 
@@ -255,6 +264,8 @@ OutfitRecommendation _copy(
     description: description,
     occasion: original.occasion,
     shirt: original.shirt,
+    shirtTitle: original.shirtTitle,
+    startingPiece: original.startingPiece,
     pants: newPants,
     shoes: newShoes,
     layer: newLayer,

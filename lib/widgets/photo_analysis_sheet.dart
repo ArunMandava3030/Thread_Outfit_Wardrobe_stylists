@@ -17,11 +17,16 @@ class PhotoAnalysisSheet extends StatefulWidget {
     required this.bytes,
     this.sampleSkin = false,
     this.measureBody = false,
+    this.garmentLabel,
   }) : assert(!(sampleSkin && measureBody));
 
   final Uint8List bytes;
   final bool sampleSkin;
   final bool measureBody;
+
+  /// A named garment uses a deliberate tap sample; torso detection stays for
+  /// the original shirt flow and is never mislabeled as pants or shoes.
+  final String? garmentLabel;
 
   @override
   State<PhotoAnalysisSheet> createState() => _PhotoAnalysisSheetState();
@@ -92,7 +97,7 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
         _rgba = pixels;
       });
       decoded = null; // The widget now owns the image and disposes it below.
-      unawaited(_runAutoAnalysis());
+      if (widget.garmentLabel == null) unawaited(_runAutoAnalysis());
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -116,7 +121,7 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
       ? 'A guide to your proportions'
       : widget.sampleSkin
       ? 'Find your skin tone'
-      : 'Find your shirt colour';
+      : 'Find your ${widget.garmentLabel ?? 'shirt'} colour';
 
   String get _description => widget.measureBody
       ? 'Use a straight-on photo with your arms relaxed. Check the automatic '
@@ -124,6 +129,9 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
       : widget.sampleSkin
       ? 'Check the estimated face sample, or tap exposed skin in even daylight. '
             'Avoid shadows, makeup and bright highlights.'
+      : widget.garmentLabel != null
+      ? 'Tap a plain area of your ${widget.garmentLabel} in the photo. '
+            'Avoid shadows and highlights, then confirm the sampled colour.'
       : 'We will locate your torso and estimate the main shirt colour. '
             'Check the sample, then tap your shirt to adjust it if needed.';
 
@@ -352,39 +360,40 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
                 ),
                 const SizedBox(height: 14),
                 if (_error == null) ...[
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _image == null || _analyzing
-                              ? null
-                              : _runAutoAnalysis,
-                          icon: const Icon(
-                            Icons.auto_awesome_outlined,
-                            size: 18,
-                          ),
-                          label: Text(
-                            _analyzing
-                                ? 'Analyzing on this device…'
-                                : 'Auto analyze',
+                  if (widget.garmentLabel == null)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _image == null || _analyzing
+                                ? null
+                                : _runAutoAnalysis,
+                            icon: const Icon(
+                              Icons.auto_awesome_outlined,
+                              size: 18,
+                            ),
+                            label: Text(
+                              _analyzing
+                                  ? 'Analyzing on this device…'
+                                  : 'Auto analyze',
+                            ),
                           ),
                         ),
-                      ),
-                      if (widget.measureBody && _autoBody != null) ...[
-                        const SizedBox(width: 8),
-                        TextButton(
-                          onPressed: () => setState(() {
-                            _manualRevision++;
-                            _autoBody = null;
-                            _automaticSelection = false;
-                            _autoBodyPoints = [];
-                            _points.clear();
-                          }),
-                          child: const Text('Mark myself'),
-                        ),
+                        if (widget.measureBody && _autoBody != null) ...[
+                          const SizedBox(width: 8),
+                          TextButton(
+                            onPressed: () => setState(() {
+                              _manualRevision++;
+                              _autoBody = null;
+                              _automaticSelection = false;
+                              _autoBodyPoints = [];
+                              _points.clear();
+                            }),
+                            child: const Text('Mark myself'),
+                          ),
+                        ],
                       ],
-                    ],
-                  ),
+                    ),
                   if (_analyzing) ...[
                     const SizedBox(height: 6),
                     const LinearProgressIndicator(color: _green),
@@ -430,7 +439,7 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
                         ? 'Use these proportions'
                         : widget.sampleSkin
                         ? 'Use this skin tone'
-                        : 'Use this shirt colour',
+                        : 'Use this ${widget.garmentLabel ?? 'shirt'} colour',
                   ),
                 ),
               ],

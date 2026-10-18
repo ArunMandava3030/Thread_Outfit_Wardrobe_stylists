@@ -11,6 +11,8 @@ IconData occasionIcon(Occasion occasion) => switch (occasion) {
   Occasion.casual => Icons.coffee_outlined,
   Occasion.beach => Icons.beach_access_outlined,
   Occasion.bikeRide => Icons.two_wheeler_rounded,
+  Occasion.party => Icons.celebration_outlined,
+  Occasion.special => Icons.auto_awesome_outlined,
 };
 
 class OutfitCard extends StatelessWidget {
@@ -24,6 +26,7 @@ class OutfitCard extends StatelessWidget {
     this.onFeedback,
     this.onPlan,
     this.wardrobeMatches,
+    this.onRate,
   });
   final OutfitRecommendation outfit;
   final bool saved;
@@ -33,6 +36,7 @@ class OutfitCard extends StatelessWidget {
   final ValueChanged<StyleFeedback>? onFeedback;
   final VoidCallback? onPlan;
   final int? wardrobeMatches;
+  final VoidCallback? onRate;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -127,15 +131,25 @@ class OutfitCard extends StatelessWidget {
                     color: ThreadTheme.muted,
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    outfit.occasion.label,
-                    style: Theme.of(context).textTheme.bodySmall,
+                  Expanded(
+                    child: Text(
+                      outfit.occasion.label,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 7),
               Text(outfit.title, style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 10),
+              _PieceLine(
+                piece: OutfitPiece(
+                  category: 'Top',
+                  title: outfit.shirtTitle,
+                  colorName: outfit.shirt.name,
+                  colorArgb: outfit.shirt.argb,
+                ),
+              ),
               _PieceLine(piece: outfit.pants),
               _PieceLine(piece: outfit.shoes),
               if (outfit.layer.colorArgb != 0) _PieceLine(piece: outfit.layer),
@@ -151,6 +165,22 @@ class OutfitCard extends StatelessWidget {
               ],
               const SizedBox(height: 10),
               const Divider(),
+              Wrap(
+                spacing: 8,
+                children: [
+                  TextButton.icon(
+                    onPressed: onSave,
+                    icon: Icon(saved ? Icons.favorite : Icons.favorite_border),
+                    label: Text(saved ? 'Favorited' : 'Favorite outfit'),
+                  ),
+                  if (onRate != null)
+                    TextButton.icon(
+                      onPressed: onRate,
+                      icon: const Icon(Icons.star_outline),
+                      label: const Text('Rate this outfit'),
+                    ),
+                ],
+              ),
               TextButton(
                 style: TextButton.styleFrom(
                   padding: EdgeInsets.zero,
@@ -324,7 +354,7 @@ class _OutfitDetails extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: () async {
                   final text =
-                      '${outfit.title} · ${outfit.occasion.label}\nShirt: ${outfit.shirt.name}\nPants: ${outfit.pants.colorName} ${outfit.pants.title}\nShoes: ${outfit.shoes.colorName} ${outfit.shoes.title}\nLayer: ${outfit.layer.colorName} ${outfit.layer.title}\n\n${outfit.fitAdvice}${outfit.safetyNote == null ? '' : '\n${outfit.safetyNote}'}';
+                      '${outfit.title} · ${outfit.occasion.label}\nTop: ${outfit.shirt.name} ${outfit.shirtTitle}\nPants: ${outfit.pants.colorName} ${outfit.pants.title}\nShoes: ${outfit.shoes.colorName} ${outfit.shoes.title}\nLayer: ${outfit.layer.colorName} ${outfit.layer.title}\n\n${outfit.fitAdvice}${outfit.safetyNote == null ? '' : '\n${outfit.safetyNote}'}';
                   try {
                     await Clipboard.setData(ClipboardData(text: text));
                     if (context.mounted) {

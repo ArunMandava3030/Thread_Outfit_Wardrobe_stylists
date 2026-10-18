@@ -1,6 +1,8 @@
 enum Occasion {
   office,
   date,
+  party,
+  special,
   casual,
   beach,
   bikeRide;
@@ -8,9 +10,31 @@ enum Occasion {
   String get label => switch (this) {
     office => 'Office',
     date => 'Date night',
+    party => 'Party',
+    special => 'Special occasion',
     casual => 'Casual outing',
     beach => 'Beach day',
     bikeRide => 'Bike ride',
+  };
+}
+
+enum StartingPiece {
+  shirt,
+  pants;
+
+  String get label => switch (this) {
+    shirt => 'Shirt first',
+    pants => 'Pants first',
+  };
+
+  String get itemLabel => switch (this) {
+    shirt => 'Shirt',
+    pants => 'Pants',
+  };
+
+  String get matchingItemLabel => switch (this) {
+    shirt => 'Pants',
+    pants => 'Top',
   };
 }
 
@@ -178,6 +202,8 @@ class OutfitRecommendation {
     required this.reasons,
     required this.fitAdvice,
     this.safetyNote,
+    this.startingPiece = StartingPiece.shirt,
+    this.shirtTitle = 'Your shirt',
   });
 
   final String id;
@@ -191,6 +217,8 @@ class OutfitRecommendation {
   final List<String> reasons;
   final String fitAdvice;
   final String? safetyNote;
+  final StartingPiece startingPiece;
+  final String shirtTitle;
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -204,6 +232,8 @@ class OutfitRecommendation {
     'reasons': reasons,
     'fitAdvice': fitAdvice,
     'safetyNote': safetyNote,
+    'startingPiece': startingPiece.name,
+    'shirtTitle': shirtTitle,
   };
 
   factory OutfitRecommendation.fromJson(Map<String, dynamic> json) =>
@@ -222,6 +252,10 @@ class OutfitRecommendation {
         ),
         fitAdvice: json['fitAdvice'] as String,
         safetyNote: json['safetyNote'] as String?,
+        startingPiece:
+            _enumOrNull(StartingPiece.values, json['startingPiece']) ??
+            StartingPiece.shirt,
+        shirtTitle: json['shirtTitle'] as String? ?? 'Your shirt',
       );
 }
 

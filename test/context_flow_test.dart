@@ -55,6 +55,19 @@ Future<void> _tap(WidgetTester tester, Finder finder) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _openPersonalization(WidgetTester tester) async {
+  await _tap(tester, find.text('Style, weather & personal preferences'));
+}
+
+Future<void> _generate(WidgetTester tester) async {
+  if (find.byKey(const Key('starting_piece_shirt')).evaluate().isNotEmpty) {
+    await _tap(tester, find.byKey(const Key('studio_next')));
+    await _tap(tester, find.byKey(const Key('matching_suggestion_0')));
+    await _tap(tester, find.byKey(const Key('studio_next')));
+  }
+  await _tap(tester, find.byKey(const Key('generate_outfits')));
+}
+
 void main() {
   testWidgets(
     'weather completed during a direction save persists after the pending write',
@@ -88,6 +101,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await _openPersonalization(tester);
 
       await tester.ensureVisible(find.byTooltip('Refresh weather'));
       await tester.pumpAndSettle();
@@ -217,6 +231,7 @@ void main() {
         isEmpty,
         reason: 'No external requests without an explicit action.',
       );
+      await _openPersonalization(tester);
       await _tap(tester, find.byKey(const Key('choose_weather_city')));
       await tester.enterText(
         find.byKey(const Key('city_search_input')),
@@ -227,7 +242,7 @@ void main() {
       expect(store.weather?.weatherCode, 61);
       await _tap(tester, find.widgetWithText(ChoiceChip, 'Preppy'));
       expect(store.direction, StyleDirection.preppy);
-      await _tap(tester, find.byKey(const Key('generate_outfits')));
+      await _generate(tester);
       final look = tester
           .widget<OutfitCard>(find.byType(OutfitCard).first)
           .outfit;
@@ -245,6 +260,7 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.pumpAndSettle();
       await mount();
+      await _openPersonalization(tester);
       expect(
         tester
             .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Preppy'))
@@ -254,7 +270,7 @@ void main() {
       expect(find.text('Chennai, India'), findsOneWidget);
       await _tap(tester, find.text('Turn off'));
       expect(store.weather, isNull);
-      await _tap(tester, find.byKey(const Key('generate_outfits')));
+      await _generate(tester);
       final dryLook = tester
           .widget<OutfitCard>(find.byType(OutfitCard).first)
           .outfit;

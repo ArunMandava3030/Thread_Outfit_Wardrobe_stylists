@@ -24,15 +24,21 @@ class StyleDirectionStylist {
         return _rebuild(
           outfit,
           direction,
-          pants: _rename(outfit.pants, recipe.$1),
+          pants: outfit.startingPiece == StartingPiece.pants
+              ? outfit.pants
+              : _rename(outfit.pants, recipe.$1),
+          shirtTitle: outfit.startingPiece == StartingPiece.pants
+              ? _topRecipe(direction, outfit.occasion)
+              : outfit.shirtTitle,
           shoes: _rename(outfit.shoes, recipe.$2),
           layer: hasLayer ? _rename(outfit.layer, recipe.$3) : outfit.layer,
           reason:
-              outfit.occasion == Occasion.office &&
+              (outfit.occasion == Occasion.office ||
+                      outfit.occasion == Occasion.special) &&
                   (direction == StyleDirection.streetwear ||
                       direction == StyleDirection.athleisure)
-              ? '${direction.label} is softened for a smart-casual office with tailored trousers and closed shoes; follow your workplace dress code.'
-              : '${direction.label} shapes the garments while your shirt, color palette and ${outfit.occasion.label.toLowerCase()} plans stay the starting point.',
+              ? '${direction.label} is softened with tailored pieces and closed shoes; follow the dress code for your ${outfit.occasion.label.toLowerCase()}.'
+              : '${direction.label} shapes the finishing pieces while your ${outfit.startingPiece.itemLabel.toLowerCase()}, chosen colors and ${outfit.occasion.label.toLowerCase()} plans stay the starting point.',
         );
       }),
     );
@@ -40,8 +46,10 @@ class StyleDirectionStylist {
 }
 
 (String, String, String) _recipe(StyleDirection direction, Occasion occasion) {
-  final office = occasion == Occasion.office;
+  final office = occasion == Occasion.office || occasion == Occasion.special;
   final beach = occasion == Occasion.beach;
+  final celebration =
+      occasion == Occasion.party || occasion == Occasion.special;
   return switch (direction) {
     StyleDirection.everyday => (
       'Straight-leg chinos',
@@ -51,19 +59,33 @@ class StyleDirectionStylist {
     StyleDirection.smartCasual =>
       beach
           ? ('Linen trousers', 'Canvas slip-ons', 'Open linen shirt')
+          : celebration
+          ? (
+              'Tailored dress trousers',
+              'Leather loafers',
+              'Textured tailored blazer',
+            )
           : ('Straight-leg chinos', 'Leather loafers', 'Unstructured blazer'),
     StyleDirection.streetwear =>
       office
           ? (
               'Relaxed tailored trousers',
               'Minimal leather sneakers',
-              'Structured overshirt',
+              occasion == Occasion.special
+                  ? 'Softly structured blazer'
+                  : 'Structured overshirt',
             )
           : beach
           ? (
               'Relaxed cotton shorts',
               'Canvas slip-ons',
               'Lightweight cotton overshirt',
+            )
+          : occasion == Occasion.party
+          ? (
+              'Relaxed tailored trousers',
+              'Minimal leather sneakers',
+              'Textured bomber',
             )
           : ('Relaxed cargo trousers', 'Low-top sneakers', 'Relaxed overshirt'),
     StyleDirection.athleisure =>
@@ -79,6 +101,12 @@ class StyleDirectionStylist {
               'Sport sandals',
               'Lightweight technical overshirt',
             )
+          : occasion == Occasion.party
+          ? (
+              'Tailored stretch trousers',
+              'Minimal leather sneakers',
+              'Unstructured stretch blazer',
+            )
           : (
               'Tapered track trousers',
               'Everyday trainers',
@@ -91,7 +119,35 @@ class StyleDirectionStylist {
               'Canvas boat shoes',
               'Lightweight cotton cardigan',
             )
+          : occasion == Occasion.special
+          ? (
+              'Pleated dress trousers',
+              'Polished leather derbies',
+              'Tailored blazer',
+            )
           : ('Straight-leg chinos', 'Penny loafers', 'Fine-knit cardigan'),
+  };
+}
+
+String _topRecipe(StyleDirection direction, Occasion occasion) {
+  if (occasion == Occasion.special) return 'Crisp dress shirt';
+  if (occasion == Occasion.beach) {
+    return direction == StyleDirection.athleisure
+        ? 'Breathable cotton T-shirt'
+        : 'Relaxed linen shirt';
+  }
+  final polished =
+      occasion == Occasion.office ||
+      occasion == Occasion.party ||
+      occasion == Occasion.date;
+  return switch (direction) {
+    StyleDirection.everyday => 'Casual button-down shirt',
+    StyleDirection.smartCasual => 'Textured button-down shirt',
+    StyleDirection.streetwear =>
+      polished ? 'Clean-cut cotton shirt' : 'Relaxed cotton T-shirt',
+    StyleDirection.athleisure =>
+      polished ? 'Fine-knit polo' : 'Breathable cotton T-shirt',
+    StyleDirection.preppy => 'Oxford button-down shirt',
   };
 }
 
@@ -108,17 +164,20 @@ OutfitRecommendation _rebuild(
   OutfitPiece? pants,
   OutfitPiece? shoes,
   OutfitPiece? layer,
+  String? shirtTitle,
   required String reason,
 }) {
   final riding = original.occasion == Occasion.bikeRide;
   final selectedPants = pants ?? original.pants;
   final selectedShoes = shoes ?? original.shoes;
   final selectedLayer = layer ?? original.layer;
-  final signature = [
+  final selectedShirtTitle = shirtTitle ?? original.shirtTitle;
+  final garmentSignature = [
     selectedPants,
     selectedShoes,
     selectedLayer,
   ].map((piece) => '${piece.title}:${piece.colorArgb}').join('|');
+  final signature = '$garmentSignature|$selectedShirtTitle';
   final reasons = original.reasons
       .where(
         (text) =>
@@ -136,6 +195,8 @@ OutfitRecommendation _rebuild(
         : '${direction.label} pieces, coordinated for your ${original.occasion.label.toLowerCase()}.',
     occasion: original.occasion,
     shirt: original.shirt,
+    shirtTitle: selectedShirtTitle,
+    startingPiece: original.startingPiece,
     pants: selectedPants,
     shoes: selectedShoes,
     layer: selectedLayer,
