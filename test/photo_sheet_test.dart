@@ -1,0 +1,276 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:thread_style/models/style_models.dart';
+import 'package:thread_style/services/photo_analyzer.dart';
+import 'package:thread_style/theme.dart';
+import 'package:thread_style/widgets/photo_analysis_sheet.dart';
+
+void main() {
+  testWidgets('decoded shirt and skin samples preserve their original colours', (
+    tester,
+  ) async {
+    _setPhoneViewport(tester);
+    final bytes = await tester.runAsync(_makeTwoColourPng);
+    expect(bytes, isNotNull);
+
+    for (final sampleSkin in [false, true]) {
+      PhotoAnalysisResult? result;
+      await _openSheet(
+        tester,
+        bytes: bytes!,
+        sampleSkin: sampleSkin,
+        onResult: (value) => result = value,
+      );
+      final label = sampleSkin ? 'Use this skin tone' : 'Use this shirt colour';
+      final confirm = find.widgetWithText(FilledButton, label);
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+
+      // The portrait fixture leaves a border on each side. That border must
+      // never be mistaken for a colour in the actual photograph.
+      final canvas = _photoCanvas();
+      await tester.ensureVisible(canvas);
+      await tester.pumpAndSettle();
+      final bounds = tester.getRect(canvas);
+      await tester.tapAt(Offset(bounds.left + 4, bounds.center.dy));
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+
+      await _tapPhotoPoint(tester, Offset(sampleSkin ? 0.75 : 0.25, 0.5));
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNotNull);
+      await _tapVisible(tester, confirm);
+
+      expect(result, isNotNull);
+      expect(result!.bodyShape, isNull);
+      if (sampleSkin) {
+        expect(result!.skinToneArgb, 0xFFC1926B);
+        expect(result!.shirtColor, isNull);
+      } else {
+        // This deliberately differs from every preset: naming must not replace
+        // the measured colour with a palette entry.
+        expect(result!.shirtColor!.argb, 0xFF4279A6);
+        expect(result!.shirtColor!.name, isNotEmpty);
+        expect(result!.skinToneArgb, isNull);
+      }
+      expect(find.byType(PhotoAnalysisSheet), findsNothing);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets(
+    'unreadable photo offers a recoverable error and cannot confirm',
+    (tester) async {
+      _setPhoneViewport(tester);
+      PhotoAnalysisResult? result;
+      var closed = false;
+      await _openSheet(
+        tester,
+        bytes: Uint8List.fromList([0, 4, 8, 12]),
+        onResult: (value) {
+          result = value;
+          closed = true;
+        },
+      );
+
+      expect(
+        find.text('This photo could not be opened. Try a different photo.'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Use this shirt colour'),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(closed, isFalse);
+      await _tapVisible(tester, find.byTooltip('Close photo'));
+      expect(closed, isTrue);
+      expect(result, isNull);
+      expect(find.byType(PhotoAnalysisSheet), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'proportion guide requires all three valid pairs and supports undo',
+    (tester) async {
+      _setPhoneViewport(tester);
+      final bytes = await tester.runAsync(_makeTwoColourPng);
+      PhotoAnalysisResult? result;
+      await _openSheet(
+        tester,
+        bytes: bytes!,
+        measureBody: true,
+        onResult: (value) => result = value,
+      );
+      final confirm = find.widgetWithText(
+        FilledButton,
+        'Use these proportions',
+      );
+      expect(find.text('Tap one outer shoulder edge'), findsOneWidget);
+
+      await _tapPhotoPoint(tester, const Offset(0.1, 0.2), body: true);
+      await _tapPhotoPoint(tester, const Offset(0.9, 0.2), body: true);
+      expect(find.text('2/6'), findsOneWidget);
+      expect(find.text('Tap one waist edge'), findsOneWidget);
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+
+      await _tapPhotoPoint(tester, const Offset(0.3, 0.5), body: true);
+      await _tapPhotoPoint(tester, const Offset(0.7, 0.5), body: true);
+      await _tapPhotoPoint(tester, const Offset(0.25, 0.8), body: true);
+      expect(find.text('5/6'), findsOneWidget);
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+
+      // A tilted final pair is not a useful width estimate. Correct it through
+      // the same undo affordance available to the user.
+      await _tapPhotoPoint(tester, const Offset(0.75, 0.5), body: true);
+      expect(find.text('6/6'), findsOneWidget);
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+      expect(
+        find.text(
+          'Keep each pair level and on opposite edges. Undo to adjust.',
+        ),
+        findsOneWidget,
+      );
+      await _tapVisible(tester, find.byTooltip('Undo last point'));
+      expect(find.text('5/6'), findsOneWidget);
+      await _tapPhotoPoint(tester, const Offset(0.75, 0.8), body: true);
+
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNotNull);
+      expect(find.text('Approximate guide: Broader shoulders'), findsOneWidget);
+      await _tapVisible(tester, confirm);
+      expect(result!.bodyShape, BodyShape.broadShoulders);
+      expect(result!.shirtColor, isNull);
+      expect(result!.skinToneArgb, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+}
+
+void _setPhoneViewport(WidgetTester tester) {
+  tester.view.devicePixelRatio = 1;
+  tester.view.physicalSize = const Size(390, 844);
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+}
+
+Future<Uint8List> _makeTwoColourPng() async {
+  final recorder = ui.PictureRecorder();
+  final canvas = ui.Canvas(recorder);
+  canvas.drawRect(
+    const Rect.fromLTWH(0, 0, 40, 120),
+    ui.Paint()..color = const Color(0xFF4279A6),
+  );
+  canvas.drawRect(
+    const Rect.fromLTWH(40, 0, 40, 120),
+    ui.Paint()..color = const Color(0xFFC1926B),
+  );
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(80, 120);
+  try {
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    return Uint8List.fromList(
+      data!.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+    );
+  } finally {
+    image.dispose();
+    picture.dispose();
+  }
+}
+
+Future<void> _openSheet(
+  WidgetTester tester, {
+  required Uint8List bytes,
+  required ValueChanged<PhotoAnalysisResult?> onResult,
+  bool sampleSkin = false,
+  bool measureBody = false,
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: ThreadTheme.theme,
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => Center(
+            child: FilledButton(
+              onPressed: () async {
+                final result = await showModalBottomSheet<PhotoAnalysisResult>(
+                  context: context,
+                  isScrollControlled: true,
+                  useSafeArea: true,
+                  builder: (_) => PhotoAnalysisSheet(
+                    bytes: bytes,
+                    sampleSkin: sampleSkin,
+                    measureBody: measureBody,
+                  ),
+                );
+                onResult(result);
+              },
+              child: const Text('Open photo'),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.tap(find.text('Open photo'));
+  await tester.pump();
+
+  // The image codec runs on the engine, outside the test's fake clock. Let its
+  // real asynchronous work finish before settling the loading animation.
+  await tester.runAsync(() async {
+    for (var attempt = 0; attempt < 150; attempt++) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await tester.pump();
+      if (find.byType(CircularProgressIndicator).evaluate().isEmpty) return;
+    }
+  });
+  expect(find.byType(CircularProgressIndicator), findsNothing);
+  await tester.pumpAndSettle();
+}
+
+Finder _photoCanvas({bool body = false}) => find.byWidgetPredicate(
+  (widget) =>
+      widget is Semantics &&
+      widget.properties.label ==
+          (body
+              ? 'Photo. Tap the indicated body edges.'
+              : 'Photo. Tap an area to sample its colour.'),
+);
+
+Future<void> _tapPhotoPoint(
+  WidgetTester tester,
+  Offset normalized, {
+  bool body = false,
+}) async {
+  final canvas = _photoCanvas(body: body);
+  await tester.ensureVisible(canvas);
+  await tester.pumpAndSettle();
+  final bounds = tester.getRect(canvas);
+  // The 80×120 fixture fits by height in this portrait phone layout.
+  final photo = Rect.fromCenter(
+    center: bounds.center,
+    width: bounds.height * 2 / 3,
+    height: bounds.height,
+  );
+  await tester.tapAt(
+    Offset(
+      photo.left + normalized.dx * photo.width,
+      photo.top + normalized.dy * photo.height,
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  expect(finder.hitTestable(), findsOneWidget);
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
+}

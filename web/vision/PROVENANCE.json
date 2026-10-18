@@ -1,0 +1,29 @@
+{
+  "runtime": {
+    "name": "@mediapipe/tasks-vision",
+    "version": "0.10.32",
+    "source": "https://registry.npmjs.org/@mediapipe/tasks-vision/-/tasks-vision-0.10.32.tgz",
+    "license": "Apache-2.0",
+    "licenseFile": "LICENSE.txt",
+    "bundleSha256": "de83c48ff329717a27aeb528d5ef5f47f077c628a5302dc483aca5b513e7464b"
+  },
+  "browserModel": {
+    "name": "MediaPipe Pose Landmarker Lite",
+    "version": "float16/1",
+    "source": "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+    "documentation": "https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker",
+    "license": "Apache-2.0",
+    "modelCard": "https://storage.googleapis.com/mediapipe-assets/Model%20Card%20BlazePose%20GHUM%203D.pdf",
+    "sha256": "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a"
+  },
+  "nativeModel": {
+    "name": "MoveNet SinglePose Lightning INT8",
+    "version": "4",
+    "source": "https://tfhub.dev/google/lite-model/movenet/singlepose/lightning/tflite/int8/4?lite-format=tflite",
+    "license": "Apache-2.0",
+    "modelCard": "https://storage.googleapis.com/movenet/MoveNet.SinglePose%20Model%20Card.pdf",
+    "asset": "assets/models/movenet_lightning.tflite",
+    "sha256": "cd7cc22fa946e5d146a7b98d496853e1923e22828d3972d579973f27f91bb105"
+  },
+  "processing": "All assets are served locally. Images are processed in a browser worker or native isolate; photos and landmarks are not sent to an API. The model detects pose joints, not clothing, skin ethnicity, health or body measurements. Color sampling and rough shoulder/hip bands are deterministic post-processing."
+}

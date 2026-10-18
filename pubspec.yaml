@@ -1,0 +1,47 @@
+name: thread_style
+description: A personal outfit companion that starts with the shirt you are wearing.
+publish_to: none
+version: 1.1.0+2
+
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+  flutter: '>=3.35.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  image_picker: ^1.2.0
+  shared_preferences: ^2.5.3
+  http: ^1.6.0
+  url_launcher: ^6.3.2
+  tflite_flutter: ^0.12.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/fonts/LICENSE.txt
+    - assets/models/movenet_lightning.tflite
+    - assets/models/LICENSE.txt
+  fonts:
+    # Flutter's browser engine also expects a default family named Roboto.
+    # Reuse the same local files to avoid its automatic default-font download.
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
+        - asset: assets/fonts/Roboto-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Roboto-Bold.ttf
+          weight: 700
+    - family: ThreadSans
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
+        - asset: assets/fonts/Roboto-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Roboto-Bold.ttf
+          weight: 700

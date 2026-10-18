@@ -1,0 +1,7 @@
+# Copy to key.properties and keep that file private (it is ignored by Git).
+# storeFile is relative to android/, or an absolute path using forward slashes.
+# Use your own stable signing key for production releases and keep a backup.
+storeFile=../.tools/signing/thread-release.jks
+storePassword=REPLACE_WITH_PRIVATE_STORE_PASSWORD
+keyAlias=thread
+keyPassword=REPLACE_WITH_PRIVATE_KEY_PASSWORD

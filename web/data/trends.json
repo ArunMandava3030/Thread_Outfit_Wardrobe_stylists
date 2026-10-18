@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "fetchedAt": "2026-10-18T11:14:30.214506Z",
+  "sources": [
+    {
+      "name": "GQ",
+      "url": "https://www.gq.com/feed/rss",
+      "fetchedAt": "2026-10-18T11:14:30.214506Z",
+      "status": "ok"
+    },
+    {
+      "name": "Esquire",
+      "url": "https://www.esquire.com/rss/style.xml/",
+      "fetchedAt": "2026-10-18T11:14:30.214506Z",
+      "status": "ok"
+    },
+    {
+      "name": "FashionBeans",
+      "url": "https://www.fashionbeans.com/feed/",
+      "fetchedAt": "2026-10-18T11:14:30.214506Z",
+      "status": "ok"
+    }
+  ],
+  "items": [
+    {
+      "headline": "On x Loewe, Ugg x JW Anderson, and All the New Launches Esquire’s Editors Loved This Week",
+      "url": "https://www.esquire.com/style/mens-fashion/a74159652/best-of-the-week-october-16-2026/",
+      "publisher": "Esquire",
+      "publishedAt": "2026-10-16T20:35:30Z"
+    },
+    {
+      "headline": "The 23 Best New Menswear Items to Buy This Week",
+      "url": "https://www.gq.com/gallery/best-new-menswear-to-buy-this-week-10-16-26",
+      "publisher": "GQ",
+      "publishedAt": "2026-10-16T18:03:36Z"
+    },
+    {
+      "headline": "The Best Business Casual Shoes for Men 2026: What to Wear Right Now",
+      "url": "https://www.gq.com/story/best-business-casual-shoes-for-men",
+      "publisher": "GQ",
+      "publishedAt": "2026-10-16T17:59:40Z"
+    },
+    {
+      "headline": "America Is Officially Back in the Selvedge Denim Business",
+      "url": "https://www.gq.com/story/mount-vernon-mills-selvedge-denim-10-16-2026",
+      "publisher": "GQ",
+      "publishedAt": "2026-10-16T16:24:56Z"
+    },
+    {
+      "headline": "Alexander Skarsgård Is a Converse Guy (And You Should Be, Too)",
+      "url": "https://www.gq.com/story/alexander-skarsgard-converse-chuck-taylors",
+      "publisher": "GQ",
+      "publishedAt": "2026-10-16T12:15:00Z"
+    },
+    {
+      "headline": "How To Wear Brown: Men’s Style And Outfits Guide 2026",
+      "url": "https://www.fashionbeans.com/article/how-to-wear-brown/",
+      "publisher": "FashionBeans",
+      "publishedAt": "2026-10-16T09:00:59Z"
+    },
+    {
+      "headline": "10 Best Bootcut Jeans for Men And How To Style Them in 2026",
+      "url": "https://www.fashionbeans.com/article/best-bootcut-jeans-for-men/",
+      "publisher": "FashionBeans",
+      "publishedAt": "2026-10-16T08:21:06Z"
+    },
+    {
+      "headline": "How To Build The Ultimate Minimalist Wardrobe For Men 2026",
+      "url": "https://www.fashionbeans.com/article/minimalist-wardrobe-men/",
+      "publisher": "FashionBeans",
+      "publishedAt": "2026-10-16T07:00:00Z"
+    },
+    {
+      "headline": "12 Pieces Of Menswear That Defined Style In The 2010s",
+      "url": "https://www.fashionbeans.com/article/menswear-defined-2010s/",
+      "publisher": "FashionBeans",
+      "publishedAt": "2026-10-16T06:00:57Z"
+    },
+    {
+      "headline": "Harvey Specter: How To Dress Like The Sharpest Man On TV",
+      "url": "https://www.fashionbeans.com/article/harvey-specter-suits-style/",
+      "publisher": "FashionBeans",
+      "publishedAt": "2026-10-16T05:04:17Z"
+    },
+    {
+      "headline": "14 Best Men’s Overcoat Brands: Ultimate Guide (Updated 2026)",
+      "url": "https://www.fashionbeans.com/article/mens-overcoat-guide/",
+      "publisher": "FashionBeans",
+      "publishedAt": "2026-10-16T02:00:55Z"
+    },
+    {
+      "headline": "The Best Menswear Deals of the Week",
+      "url": "https://www.gq.com/gallery/sale-grab-bag-10-15-2026",
+      "publisher": "GQ",
+      "publishedAt": "2026-10-15T19:15:23Z"
+    },
+    {
+      "headline": "Tyler, the Creator Put His Stamp on FC Barcelona’s Killer New Kits",
+      "url": "https://www.gq.com/story/tyler-the-creator-barcelona-jerseys-golf-wang-10-15-2026",
+      "publisher": "GQ",
+      "publishedAt": "2026-10-15T18:00:46Z"
+    },
+    {
+      "headline": "The Anatomy of a Great Dress Shirt",
+      "url": "https://www.esquire.com/style/big-black-book/a73825579/what-makes-dress-shirt-good/",
+      "publisher": "Esquire",
+      "publishedAt": "2026-10-15T10:39:09Z"
+    },
+    {
+      "headline": "5 Essentials That'll Transform Your Fall Wardrobe",
+      "url": "https://www.esquire.com/style/big-black-book/a73825566/fall-essentials-men-2026/",
+      "publisher": "Esquire",
+      "publishedAt": "2026-10-15T10:33:24Z"
+    },
+    {
+      "headline": "Lululemon’s “We Made Too Much” Section Just Got a Fall Restock",
+      "url": "https://www.esquire.com/style/mens-fashion/a74091476/lululemon-finds-october-2026/",
+      "publisher": "Esquire",
+      "publishedAt": "2026-10-14T18:55:05Z"
+    },
+    {
+      "headline": "14 Soft and Sturdy Flannel Shirts to Anchor Your Fall Wardrobe",
+      "url": "https://www.esquire.com/style/mens-fashion/g74111538/best-mens-flannel-shirts/",
+      "publisher": "Esquire",
+      "publishedAt": "2026-10-14T18:35:06Z"
+    },
+    {
+      "headline": "James McAvoy Just Nailed Middle-Aged Smart Casual",
+      "url": "https://www.esquire.com/style/mens-fashion/a74120308/james-mcavoy-smart-casual/",
+      "publisher": "Esquire",
+      "publishedAt": "2026-10-13T21:02:19Z"
+    }
+  ]
+}

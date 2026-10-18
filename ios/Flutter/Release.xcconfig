@@ -1,0 +1,4 @@
+#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
+#include "Generated.xcconfig"
+// Keep the global C symbols resolved dynamically by tflite_flutter.
+STRIP_STYLE = non-global
