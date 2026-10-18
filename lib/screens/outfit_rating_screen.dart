@@ -58,6 +58,7 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
   TrendSnapshot? _trends;
   String? _trendError;
   OutfitRating? _rating;
+  final _resultKey = GlobalKey();
   final _savedThisSession = <String>{};
   late TrendService _trendService;
   late bool _ownsTrendService;
@@ -161,6 +162,28 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
     change();
     _rating = null;
   });
+
+  void _rate() {
+    setState(() {
+      _rating = const OutfitRater().rate(
+        _input,
+        profile: widget.profile,
+        hasProfile: widget.hasProfile,
+        history: widget.history,
+        trends: _trends,
+      );
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final resultContext = _resultKey.currentContext;
+      if (!mounted || resultContext == null) return;
+      Scrollable.ensureVisible(
+        resultContext,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+        alignment: .05,
+      );
+    });
+  }
 
   OutfitRatingInput get _input => OutfitRatingInput(
     topColor: _topColor,
@@ -496,17 +519,7 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
         const SizedBox(height: 22),
         FilledButton.icon(
           key: const Key('rate_current_outfit'),
-          onPressed: _picking
-              ? null
-              : () => setState(
-                  () => _rating = const OutfitRater().rate(
-                    _input,
-                    profile: widget.profile,
-                    hasProfile: widget.hasProfile,
-                    history: widget.history,
-                    trends: _trends,
-                  ),
-                ),
+          onPressed: _picking ? null : _rate,
           icon: const Icon(Icons.star_outline_rounded),
           label: const Text('Rate this outfit'),
         ),
@@ -517,7 +530,7 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
         ),
         if (_rating case final rating?) ...[
           const SizedBox(height: 24),
-          _result(rating),
+          KeyedSubtree(key: _resultKey, child: _result(rating)),
         ],
       ],
     );

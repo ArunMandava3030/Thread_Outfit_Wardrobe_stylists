@@ -125,6 +125,15 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await _pump(tester, onFavorite: (_) async {}, scale: 1.6);
     await _tapVisible(tester, find.byKey(const Key('rate_current_outfit')));
+    // The result must reveal itself without another scroll after submitting.
+    expect(
+      find.byKey(const Key('outfit_rating_score')).hitTestable(),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('favorite_rated_outfit')).hitTestable(),
+      findsOneWidget,
+    );
     await _tapVisible(tester, find.byKey(const Key('favorite_rated_outfit')));
     expect(find.text('Saved to favorites'), findsOneWidget);
     expect(tester.takeException(), isNull);
