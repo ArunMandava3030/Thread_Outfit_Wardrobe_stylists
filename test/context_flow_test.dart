@@ -56,13 +56,15 @@ Future<void> _tap(WidgetTester tester, Finder finder) async {
 }
 
 Future<void> _openPersonalization(WidgetTester tester) async {
-  await _tap(tester, find.text('Style, weather & personal preferences'));
+  if (find.byKey(const Key('choose_weather_city')).evaluate().isNotEmpty) {
+    return;
+  }
+  await _tap(tester, find.byKey(const Key('studio_personalization')));
 }
 
 Future<void> _generate(WidgetTester tester) async {
   if (find.byKey(const Key('starting_piece_shirt')).evaluate().isNotEmpty) {
     await _tap(tester, find.byKey(const Key('studio_next')));
-    await _tap(tester, find.byKey(const Key('matching_suggestion_0')));
     await _tap(tester, find.byKey(const Key('studio_next')));
   }
   await _tap(tester, find.byKey(const Key('generate_outfits')));
@@ -251,6 +253,7 @@ void main() {
       expect(look.reasons.any((reason) => reason.contains('Preppy')), isTrue);
 
       failWeather = true;
+      await _openPersonalization(tester);
       await _tap(tester, find.byTooltip('Refresh weather'));
       expect(
         store.weather?.weatherCode,

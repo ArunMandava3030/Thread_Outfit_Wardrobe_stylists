@@ -55,6 +55,7 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
   bool _loadingTrends = false;
   bool _saving = false;
   bool _picking = false;
+  bool _moreOptions = false;
   TrendSnapshot? _trends;
   String? _trendError;
   OutfitRating? _rating;
@@ -212,7 +213,9 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
     try {
       final trends = await _trendService.fetchTrends();
       if (!mounted) return;
-      _edit(() => _trends = trends);
+      setState(() => _trends = trends);
+      // A delayed headline response must not send someone back to the form.
+      if (_rating != null) _rate();
     } catch (_) {
       if (!mounted) return;
       setState(
@@ -224,15 +227,12 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
     }
   }
 
-  Future<void> _pickColor(
-    String garment,
-    ValueChanged<ShirtColor> onChanged,
-  ) async {
-    if (_picking || widget.onPickColor == null) return;
+  Future<ShirtColor?> _pickColor(String garment) async {
+    if (_picking || widget.onPickColor == null) return null;
     setState(() => _picking = true);
     try {
       final color = await widget.onPickColor!(garment);
-      if (mounted && color != null) _edit(() => onChanged(color));
+      return mounted ? color : null;
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -246,6 +246,7 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
     } finally {
       if (mounted) setState(() => _picking = false);
     }
+    return null;
   }
 
   Future<void> _save(OutfitRating rating) async {
@@ -288,252 +289,418 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    if (_rating case final rating?) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextButton.icon(
+            key: const Key('rating_edit_outfit'),
+            onPressed: () => setState(() => _rating = null),
+            icon: const Icon(Icons.arrow_back, size: 18),
+            label: const Text('Edit outfit'),
+          ),
+          const SizedBox(height: 8),
+          KeyedSubtree(key: _resultKey, child: _result(rating)),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Eyebrow('A second look, your way'),
+        Text('Your outfit', style: theme.textTheme.headlineMedium),
+        const SizedBox(height: 6),
+        Text(
+          widget.initialOutfit == null
+              ? 'Check these pieces match what you are wearing, then rate your outfit.'
+              : 'These pieces come from your suggestion. Check the types and colors match what you are wearing.',
+        ),
+        const SizedBox(height: 16),
+        SurfaceCard(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Column(
+            children: [
+              _garmentRow(
+                'Top',
+                _top.label,
+                _topColor,
+                () => _editGarment(
+                  label: 'Top',
+                  typeLabel: 'Top type',
+                  type: _top,
+                  types: RatingTop.values,
+                  name: (value) => value.label,
+                  color: _topColor,
+                  onDone: (type, color) => _edit(() {
+                    _top = type;
+                    _topColor = color;
+                  }),
+                ),
+              ),
+              const Divider(height: 1),
+              _garmentRow(
+                'Pants',
+                _bottom.label,
+                _pantsColor,
+                () => _editGarment(
+                  label: 'Pants',
+                  typeLabel: 'Bottom type',
+                  type: _bottom,
+                  types: RatingBottom.values,
+                  name: (value) => value.label,
+                  color: _pantsColor,
+                  onDone: (type, color) => _edit(() {
+                    _bottom = type;
+                    _pantsColor = color;
+                  }),
+                ),
+              ),
+              const Divider(height: 1),
+              _garmentRow(
+                'Shoes',
+                _shoes.label,
+                _shoesColor,
+                () => _editGarment(
+                  label: 'Shoes',
+                  typeLabel: 'Shoe type',
+                  type: _shoes,
+                  types: RatingShoes.values,
+                  name: (value) => value.label,
+                  color: _shoesColor,
+                  onDone: (type, color) => _edit(() {
+                    _shoes = type;
+                    _shoesColor = color;
+                  }),
+                ),
+              ),
+              const Divider(height: 1),
+              _garmentRow(
+                'Layer',
+                _layer.label,
+                _layer == RatingLayer.none ? null : _layerColor,
+                () => _editGarment(
+                  label: 'Layer',
+                  typeLabel: 'Layer type',
+                  type: _layer,
+                  types: RatingLayer.values,
+                  name: (value) => value.label,
+                  color: _layerColor,
+                  hasColor: (value) => value != RatingLayer.none,
+                  onDone: (type, color) => _edit(() {
+                    _layer = type;
+                    _layerColor = color;
+                  }),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _dropdown(
+          'Occasion',
+          _occasion,
+          Occasion.values,
+          (value) => value.label,
+          (value) => _edit(() => _occasion = value),
+        ),
+        const SizedBox(height: 8),
+        ExpansionTile(
+          key: const Key('rating_more_options'),
+          initiallyExpanded: _moreOptions,
+          onExpansionChanged: (expanded) => _moreOptions = expanded,
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: const EdgeInsets.only(bottom: 16),
+          title: const Text('More options'),
+          children: [_options()],
+        ),
         const SizedBox(height: 12),
-        Text('Rate my outfit', style: theme.textTheme.displayMedium),
-        const SizedBox(height: 12),
-        const Text(
-          'Tell Thread what you are wearing. Confirm the garment types and colors, then get a styling estimate from 0 to 5 with practical changes to try.',
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            key: const Key('rate_current_outfit'),
+            onPressed: _picking ? null : _rate,
+            icon: const Icon(Icons.star_outline_rounded),
+            label: const Text('Rate this outfit'),
+          ),
         ),
         const SizedBox(height: 8),
         Text(
           widget.hasProfile
-              ? 'Your saved profile is ready for optional palette and fit advice.'
-              : 'You can rate an outfit without a profile. Add one later for personal palette and fit advice.',
+              ? 'Your saved profile is included in the personal advice.'
+              : 'No profile needed. Add one later for personal advice.',
           style: theme.textTheme.bodySmall,
         ),
-        const SizedBox(height: 24),
-        SurfaceCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '1. What are you wearing?',
-                style: theme.textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Colors alone cannot identify garment type or fit. Edit each piece to match your actual outfit.',
-              ),
-              if (widget.initialOutfit != null) ...[
-                const SizedBox(height: 8),
-                const Text(
-                  'These starting values come from an outfit suggestion. Confirm or change every garment type before rating what you are actually wearing.',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ],
-              const SizedBox(height: 18),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final columns = constraints.maxWidth >= 620 ? 2 : 1;
-                  final width =
-                      (constraints.maxWidth - (columns - 1) * 20) / columns;
-                  return Wrap(
-                    spacing: 20,
-                    runSpacing: 22,
-                    children: [
-                      SizedBox(
-                        width: width,
-                        child: _garment(
-                          'Top',
-                          _dropdown(
-                            'Top type',
-                            _top,
-                            RatingTop.values,
-                            (value) => value.label,
-                            (value) => _edit(() => _top = value),
-                          ),
-                          _topColor,
-                          (color) => _topColor = color,
-                        ),
-                      ),
-                      SizedBox(
-                        width: width,
-                        child: _garment(
-                          'Pants',
-                          _dropdown(
-                            'Bottom type',
-                            _bottom,
-                            RatingBottom.values,
-                            (value) => value.label,
-                            (value) => _edit(() => _bottom = value),
-                          ),
-                          _pantsColor,
-                          (color) => _pantsColor = color,
-                        ),
-                      ),
-                      SizedBox(
-                        width: width,
-                        child: _garment(
-                          'Shoes',
-                          _dropdown(
-                            'Shoe type',
-                            _shoes,
-                            RatingShoes.values,
-                            (value) => value.label,
-                            (value) => _edit(() => _shoes = value),
-                          ),
-                          _shoesColor,
-                          (color) => _shoesColor = color,
-                        ),
-                      ),
-                      SizedBox(
-                        width: width,
-                        child: _garment(
-                          'Layer',
-                          _dropdown(
-                            'Layer type',
-                            _layer,
-                            RatingLayer.values,
-                            (value) => value.label,
-                            (value) => _edit(() => _layer = value),
-                          ),
-                          _layerColor,
-                          (color) => _layerColor = color,
-                          showColor: _layer != RatingLayer.none,
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ],
-          ),
+      ],
+    );
+  }
+
+  Widget _options() {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _dropdown(
+          'Dress code',
+          _dress,
+          DressExpectation.values,
+          (value) => value.label,
+          (value) => _edit(() => _dress = value),
         ),
-        const SizedBox(height: 18),
-        SurfaceCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '2. Where are you going?',
-                style: theme.textTheme.titleLarge,
-              ),
-              const SizedBox(height: 16),
-              _dropdown(
-                'Rating occasion',
-                _occasion,
-                Occasion.values,
-                (value) => value.label,
-                (value) => _edit(() => _occasion = value),
-              ),
-              const SizedBox(height: 14),
-              _dropdown(
-                'Dress code',
-                _dress,
-                DressExpectation.values,
-                (value) => value.label,
-                (value) => _edit(() => _dress = value),
-              ),
-              const SizedBox(height: 14),
-              _dropdown(
-                'Your style direction',
-                _direction,
-                StyleDirection.values,
-                (value) => value.label,
-                (value) => _edit(() => _direction = value),
-              ),
-            ],
-          ),
+        const SizedBox(height: 14),
+        _dropdown(
+          'Style',
+          _direction,
+          StyleDirection.values,
+          (value) => value.label,
+          (value) => _edit(() => _direction = value),
         ),
-        const SizedBox(height: 18),
-        SurfaceCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('3. Add a fit check', style: theme.textTheme.titleLarge),
-              const SizedBox(height: 8),
-              const Text(
-                'Optional. Your height and shoulder proportions cannot tell whether a particular garment fits. These observations can.',
-              ),
-              const SizedBox(height: 16),
-              _dropdown(
-                'Movement and comfort',
-                _comfort,
-                FitComfort.values,
-                (value) => value.label,
-                (value) => _edit(() => _comfort = value),
-              ),
-              if (_bottom != RatingBottom.shorts) ...[
-                const SizedBox(height: 14),
-                _dropdown(
-                  'Trouser hem',
-                  _hem,
-                  TrouserHem.values,
-                  (value) => value.label,
-                  (value) => _edit(() => _hem = value),
-                ),
-              ],
-              const SizedBox(height: 14),
-              _dropdown(
-                'Your preferred silhouette',
-                _silhouette,
-                SilhouetteFit.values,
-                (value) => value.label,
-                (value) => _edit(() => _silhouette = value),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
-        SurfaceCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SwitchListTile.adaptive(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Consider recent style headlines'),
-                subtitle: const Text(
-                  'Optional: a small bonus for a fresh headline that mentions your selected style. This does not measure popularity.',
-                ),
-                value: _includeTrends,
-                onChanged: (value) {
-                  _edit(() => _includeTrends = value);
-                  if (value && _trends == null) _loadTrends();
-                },
-              ),
-              if (_includeTrends) ...[
-                OutlinedButton.icon(
-                  onPressed: _loadingTrends ? null : _loadTrends,
-                  icon: const Icon(Icons.refresh, size: 18),
-                  label: Text(
-                    _loadingTrends
-                        ? 'Checking headlines…'
-                        : 'Refresh rating headlines',
-                  ),
-                ),
-                if (_trends != null)
-                  Text(
-                    'Feed checked ${_trends!.fetchedAt.toUtc().toIso8601String().substring(0, 10)} (UTC).${_trends!.isStaleAt(DateTime.now()) ? ' Over 48 hours old; no trend bonus applies.' : ''}',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                if (_trendError != null)
-                  Text(_trendError!, style: theme.textTheme.bodySmall),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 22),
-        FilledButton.icon(
-          key: const Key('rate_current_outfit'),
-          onPressed: _picking ? null : _rate,
-          icon: const Icon(Icons.star_outline_rounded),
-          label: const Text('Rate this outfit'),
-        ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 20),
+        Text('How does it fit?', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 6),
         const Text(
-          'A subjective styling estimate from explainable rules and your local preference model. It rates garment choices, not your appearance. Photos and profile details stay on this device.',
-          style: TextStyle(fontSize: 12, color: ThreadTheme.muted),
+          'Optional. Choose what you notice when wearing these clothes.',
         ),
-        if (_rating case final rating?) ...[
-          const SizedBox(height: 24),
-          KeyedSubtree(key: _resultKey, child: _result(rating)),
+        const SizedBox(height: 14),
+        _dropdown(
+          'Comfort',
+          _comfort,
+          FitComfort.values,
+          (value) => value.label,
+          (value) => _edit(() => _comfort = value),
+        ),
+        if (_bottom != RatingBottom.shorts) ...[
+          const SizedBox(height: 14),
+          _dropdown(
+            'Pants length',
+            _hem,
+            TrouserHem.values,
+            (value) => value.label,
+            (value) => _edit(() => _hem = value),
+          ),
+        ],
+        const SizedBox(height: 14),
+        _dropdown(
+          'Overall fit',
+          _silhouette,
+          SilhouetteFit.values,
+          (value) => value.label,
+          (value) => _edit(() => _silhouette = value),
+        ),
+        const SizedBox(height: 8),
+        SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Include current trends'),
+          subtitle: const Text('Fresh style headlines can add a small bonus.'),
+          value: _includeTrends,
+          onChanged: (value) {
+            _edit(() => _includeTrends = value);
+            if (value && _trends == null) _loadTrends();
+          },
+        ),
+        if (_includeTrends) ...[
+          OutlinedButton.icon(
+            onPressed: _loadingTrends ? null : _loadTrends,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: Text(
+              _loadingTrends ? 'Checking headlines…' : 'Refresh headlines',
+            ),
+          ),
+          if (_trends != null)
+            Text(
+              'Feed checked ${_trends!.fetchedAt.toUtc().toIso8601String().substring(0, 10)} (UTC).${_trends!.isStaleAt(DateTime.now()) ? ' Over 48 hours old; no trend bonus applies.' : ''}',
+              style: theme.textTheme.bodySmall,
+            ),
+          if (_trendError != null)
+            Text(_trendError!, style: theme.textTheme.bodySmall),
         ],
       ],
     );
+  }
+
+  Widget _garmentRow(
+    String label,
+    String type,
+    ShirtColor? color,
+    VoidCallback onEdit,
+  ) => Row(
+    children: [
+      Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: color == null ? ThreadTheme.canvas : Color(color.argb),
+          shape: BoxShape.circle,
+          border: Border.all(color: ThreadTheme.line),
+        ),
+        child: color == null ? const Icon(Icons.remove, size: 16) : null,
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                color == null ? type : '${color.name} · $type',
+                key: ValueKey('rating-summary-$label'),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      ),
+      TextButton(
+        key: ValueKey('rating-edit-$label'),
+        onPressed: _picking ? null : onEdit,
+        child: Text(color == null ? 'Add' : 'Edit'),
+      ),
+    ],
+  );
+
+  Future<void> _editGarment<T extends Enum>({
+    required String label,
+    required String typeLabel,
+    required T type,
+    required List<T> types,
+    required String Function(T) name,
+    required ShirtColor color,
+    required void Function(T, ShirtColor) onDone,
+    bool Function(T)? hasColor,
+  }) async {
+    var draftType = type;
+    var draftColor = color;
+    var picking = false;
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, updateSheet) => ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * .88,
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Edit ${label.toLowerCase()}',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                      IconButton(
+                        key: const Key('rating-editor-cancel'),
+                        onPressed: () => Navigator.pop(sheetContext, false),
+                        tooltip: 'Cancel changes',
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      key: const Key('rating-editor-scroll'),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _dropdown(
+                            typeLabel,
+                            draftType,
+                            types,
+                            name,
+                            (value) => updateSheet(() => draftType = value),
+                          ),
+                          if (hasColor?.call(draftType) ?? true) ...[
+                            const SizedBox(height: 18),
+                            Text(
+                              '$label color: ${draftColor.name}',
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              children: [
+                                for (final preset in ShirtColor.presets)
+                                  ChoiceChip(
+                                    key: ValueKey(
+                                      'rating-$label-color-${preset.name}',
+                                    ),
+                                    label: Text(preset.name),
+                                    avatar: CircleAvatar(
+                                      backgroundColor: Color(preset.argb),
+                                    ),
+                                    selected: draftColor.argb == preset.argb,
+                                    onSelected: (_) =>
+                                        updateSheet(() => draftColor = preset),
+                                  ),
+                              ],
+                            ),
+                            if (widget.onPickColor != null) ...[
+                              const SizedBox(height: 12),
+                              OutlinedButton.icon(
+                                key: const Key('rating-editor-photo'),
+                                onPressed: picking
+                                    ? null
+                                    : () async {
+                                        updateSheet(() => picking = true);
+                                        final sampled = await _pickColor(label);
+                                        if (!sheetContext.mounted) return;
+                                        updateSheet(() {
+                                          picking = false;
+                                          if (sampled != null) {
+                                            draftColor = sampled;
+                                          }
+                                        });
+                                      },
+                                icon: const Icon(
+                                  Icons.add_a_photo_outlined,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  picking
+                                      ? 'Reading photo…'
+                                      : 'Pick color from photo',
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Photo sampling reads color. Choose the garment type above.',
+                              ),
+                            ],
+                          ],
+                          const SizedBox(height: 8),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      key: const Key('rating-editor-done'),
+                      onPressed: picking
+                          ? null
+                          : () => Navigator.pop(sheetContext, true),
+                      child: const Text('Done'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    if (mounted && confirmed == true) onDone(draftType, draftColor);
   }
 
   Widget _dropdown<T extends Enum>(
@@ -557,99 +724,6 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
     onChanged: (value) {
       if (value != null) onChanged(value);
     },
-  );
-
-  Widget _garment(
-    String label,
-    Widget typeField,
-    ShirtColor color,
-    ValueChanged<ShirtColor> update, {
-    bool showColor = true,
-  }) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      typeField,
-      if (showColor) ...[
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 10,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Container(
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
-                color: Color(color.argb),
-                shape: BoxShape.circle,
-                border: Border.all(color: ThreadTheme.line),
-              ),
-            ),
-            Text(
-              '$label color: ${color.name}',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 4,
-          runSpacing: 4,
-          children: [
-            for (final preset in ShirtColor.presets)
-              Semantics(
-                label: '$label ${preset.name}',
-                selected: color.argb == preset.argb,
-                button: true,
-                child: Tooltip(
-                  message: preset.name,
-                  child: InkWell(
-                    key: ValueKey('rating-$label-color-${preset.name}'),
-                    onTap: () => _edit(() => update(preset)),
-                    borderRadius: BorderRadius.circular(22),
-                    child: SizedBox(
-                      width: 44,
-                      height: 44,
-                      child: Center(
-                        child: Container(
-                          width: 30,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Color(preset.argb),
-                            border: Border.all(
-                              color: color.argb == preset.argb
-                                  ? ThreadTheme.ink
-                                  : ThreadTheme.line,
-                              width: color.argb == preset.argb ? 3 : 1,
-                            ),
-                          ),
-                          child: color.argb == preset.argb
-                              ? Icon(
-                                  Icons.check,
-                                  size: 18,
-                                  color:
-                                      Color(preset.argb).computeLuminance() > .4
-                                      ? ThreadTheme.ink
-                                      : Colors.white,
-                                )
-                              : null,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-        if (widget.onPickColor != null)
-          TextButton.icon(
-            onPressed: _picking ? null : () => _pickColor(label, update),
-            icon: const Icon(Icons.add_a_photo_outlined, size: 17),
-            label: Text('Read $label color from photo'),
-          ),
-      ],
-    ],
   );
 
   Widget _result(OutfitRating rating) {
@@ -709,6 +783,10 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
             title: const Text('How this score works'),
             expandedCrossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const Text(
+                'A subjective styling estimate based on clothes, occasion, fit checks and your local preferences. Photos and profile details stay on this device.',
+              ),
+              const SizedBox(height: 12),
               for (final component in rating.components)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),

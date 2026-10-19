@@ -6,6 +6,21 @@ import 'package:thread_style/models/style_models.dart';
 import 'package:thread_style/services/style_engine.dart';
 
 void main() {
+  testWidgets('390px phone keeps each basic next action inside the viewport', (
+    tester,
+  ) async {
+    await _pump(tester);
+    for (final key in ['guest_continue', 'guest_continue', 'guest_generate']) {
+      final action = find.byKey(Key(key));
+      expect(tester.getTopLeft(action).dy, greaterThanOrEqualTo(0));
+      expect(tester.getBottomRight(action).dy, lessThanOrEqualTo(844));
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+    }
+    expect(find.byType(GuestOutfitCard), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('shirt-first flow preserves chosen colors and resets on reload', (
     tester,
   ) async {
@@ -15,8 +30,12 @@ void main() {
     expect(find.byKey(const Key('guest_occasion_date')), findsNothing);
     final match = await _toOccasion(tester, colorName: 'Navy');
     await _tap(tester, find.byKey(const Key('guest_occasion_date')));
+    expect(find.byKey(const Key('guest_height')), findsNothing);
+    await _openOptions(tester);
     await tester.enterText(find.byKey(const Key('guest_height')), '190');
     await _tap(tester, find.byKey(const Key('guest_generate')));
+    expect(find.byType(GuestOutfitCard), findsOneWidget);
+    await _showAll(tester);
 
     final cards = tester.widgetList<GuestOutfitCard>(
       find.byType(GuestOutfitCard),
@@ -43,6 +62,7 @@ void main() {
     expect(find.byType(GuestOutfitCard), findsNothing);
     expect(find.byKey(const Key('guest_start_shirt')), findsOneWidget);
     await _toOccasion(tester);
+    await _openOptions(tester);
     final input = tester.widget<TextFormField>(
       find.byKey(const Key('guest_height')),
     );
@@ -67,6 +87,7 @@ void main() {
       colorName: 'Black',
     );
     await _tap(tester, find.byKey(const Key('guest_occasion_party')));
+    await _openOptions(tester);
     await tester.enterText(find.byKey(const Key('guest_height')), '168');
     await _tap(tester, find.byKey(const Key('guest_back')));
     expect(
@@ -90,6 +111,7 @@ void main() {
       '168',
     );
     await _tap(tester, find.byKey(const Key('guest_generate')));
+    await _showAll(tester);
     for (final card in tester.widgetList<GuestOutfitCard>(
       find.byType(GuestOutfitCard),
     )) {
@@ -114,6 +136,8 @@ void main() {
     for (final occasion in Occasion.values) {
       await _tap(tester, find.byKey(Key('guest_occasion_${occasion.name}')));
       await _tap(tester, find.byKey(const Key('guest_generate')));
+      expect(find.byType(GuestOutfitCard), findsOneWidget);
+      await _showAll(tester);
       final cards = tester.widgetList<GuestOutfitCard>(
         find.byType(GuestOutfitCard),
       );
@@ -134,53 +158,72 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('changing the starting color or piece requires a fresh match', (
-    tester,
-  ) async {
-    await _pump(tester);
-    final match = await _toOccasion(tester);
-    await _tap(tester, find.byKey(const Key('guest_back')));
-    await _tap(tester, find.byKey(const Key('guest_back')));
-    await _tap(tester, find.byKey(const Key('guest_continue')));
-    expect(
-      tester
-          .widget<ChoiceChip>(find.byKey(Key('guest_match_${match.name}')))
-          .selected,
-      isTrue,
-    );
-    await _tap(tester, find.byKey(const Key('guest_back')));
-    await _tap(tester, find.byKey(const Key('guest_color_Burgundy')));
-    await _tap(tester, find.byKey(const Key('guest_continue')));
-    expect(
-      tester
-          .widget<FilledButton>(find.byKey(const Key('guest_continue')))
-          .onPressed,
-      isNull,
-    );
-    expect(find.text('Choose one color to continue.'), findsOneWidget);
-    final color = ShirtColor.presets.firstWhere(
-      (item) => item.name == 'Burgundy',
-    );
-    final nextMatch = const StyleEngine()
-        .matchingColors(startingPiece: StartingPiece.shirt, color: color)
-        .first;
-    await _tap(tester, find.byKey(Key('guest_match_${nextMatch.name}')));
-    await _tap(tester, find.byKey(const Key('guest_back')));
-    await _tap(tester, find.byKey(const Key('guest_start_pants')));
-    await _tap(tester, find.byKey(const Key('guest_continue')));
-    expect(
-      tester
-          .widget<FilledButton>(find.byKey(const Key('guest_continue')))
-          .onPressed,
-      isNull,
-    );
-    expect(find.byType(GuestOutfitCard), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'changed starting pieces get a fresh suggested match with no blocked step',
+    (tester) async {
+      await _pump(tester);
+      final match = await _toOccasion(tester);
+      await _tap(tester, find.byKey(const Key('guest_back')));
+      await _tap(tester, find.byKey(const Key('guest_back')));
+      await _tap(tester, find.byKey(const Key('guest_continue')));
+      expect(
+        tester
+            .widget<ChoiceChip>(find.byKey(Key('guest_match_${match.name}')))
+            .selected,
+        isTrue,
+      );
+      await _tap(tester, find.byKey(const Key('guest_back')));
+      await _tap(tester, find.byKey(const Key('guest_color_Burgundy')));
+      await _tap(tester, find.byKey(const Key('guest_continue')));
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('guest_continue')))
+            .onPressed,
+        isNotNull,
+      );
+      final color = ShirtColor.presets.firstWhere(
+        (item) => item.name == 'Burgundy',
+      );
+      final nextMatch = const StyleEngine()
+          .matchingColors(startingPiece: StartingPiece.shirt, color: color)
+          .first;
+      expect(
+        tester
+            .widget<ChoiceChip>(
+              find.byKey(Key('guest_match_${nextMatch.name}')),
+            )
+            .selected,
+        isTrue,
+      );
+      await _tap(tester, find.byKey(const Key('guest_back')));
+      await _tap(tester, find.byKey(const Key('guest_start_pants')));
+      await _tap(tester, find.byKey(const Key('guest_continue')));
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('guest_continue')))
+            .onPressed,
+        isNotNull,
+      );
+      final pantsMatch = const StyleEngine()
+          .matchingColors(startingPiece: StartingPiece.pants, color: color)
+          .first;
+      expect(
+        tester
+            .widget<ChoiceChip>(
+              find.byKey(Key('guest_match_${pantsMatch.name}')),
+            )
+            .selected,
+        isTrue,
+      );
+      expect(find.byType(GuestOutfitCard), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('height validation prevents misleading fit tips', (tester) async {
     await _pump(tester);
     await _toOccasion(tester);
+    await _openOptions(tester);
     await tester.enterText(find.byKey(const Key('guest_height')), 'NaN');
     await _tap(tester, find.byKey(const Key('guest_generate')));
     expect(find.byType(GuestOutfitCard), findsNothing);
@@ -190,7 +233,7 @@ void main() {
     expect(find.byType(GuestOutfitCard), findsNothing);
     await tester.enterText(find.byKey(const Key('guest_height')), '');
     await _tap(tester, find.byKey(const Key('guest_generate')));
-    expect(find.byType(GuestOutfitCard), findsNWidgets(3));
+    expect(find.byType(GuestOutfitCard), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -199,10 +242,12 @@ void main() {
     (tester) async {
       await _pump(tester);
       final match = await _toOccasion(tester);
+      await _openOptions(tester);
       await _tap(tester, find.byType(DropdownButtonFormField<StyleDirection>));
       await tester.tap(find.text('Streetwear').last);
       await tester.pumpAndSettle();
       await _tap(tester, find.byKey(const Key('guest_generate')));
+      await _showAll(tester);
       for (final card in tester.widgetList<GuestOutfitCard>(
         find.byType(GuestOutfitCard),
       )) {
@@ -224,19 +269,30 @@ void main() {
     await _toOccasion(tester, startingPiece: StartingPiece.pants);
     await _tap(tester, find.byKey(const Key('guest_generate')));
     await _tap(tester, find.text('Why it works').first);
-    expect(find.byType(GuestOutfitCard), findsNWidgets(3));
+    expect(find.byType(GuestOutfitCard), findsOneWidget);
     expect(
       find.textContaining('comfortable fit at the shoulders'),
       findsOneWidget,
     );
-    await _tap(tester, find.text('App releases'), tap: false);
+    await _showAll(tester);
+    expect(find.byType(GuestOutfitCard), findsNWidgets(3));
+    await _tap(
+      tester,
+      find.text('Get the app for photos and favorites'),
+      tap: false,
+    );
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('desktop shows three outfits in one row', (tester) async {
+  testWidgets('desktop shows one outfit first and discloses alternatives', (
+    tester,
+  ) async {
     await _pump(tester, size: const Size(1440, 1080));
     await _toOccasion(tester);
     await _tap(tester, find.byKey(const Key('guest_generate')));
+    expect(find.byType(GuestOutfitCard), findsOneWidget);
+    expect(find.text('Show 2 more outfits'), findsOneWidget);
+    await _showAll(tester);
     final cards = find.byType(GuestOutfitCard);
     expect(cards, findsNWidgets(3));
     final positions = List.generate(3, (i) => tester.getTopLeft(cards.at(i)));
@@ -244,9 +300,58 @@ void main() {
     expect(positions[1].dy, positions[2].dy);
     expect(positions[0].dx, lessThan(positions[1].dx));
     expect(positions[1].dx, lessThan(positions[2].dx));
+    await _tap(tester, find.byKey(const Key('guest_more_outfits')));
+    expect(find.byType(GuestOutfitCard), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'a custom matching color survives back navigation and generation',
+    (tester) async {
+      await _pump(tester);
+      await _tap(tester, find.byKey(const Key('guest_start_pants')));
+      await _tap(tester, find.byKey(const Key('guest_color_Navy')));
+      await _tap(tester, find.byKey(const Key('guest_continue')));
+      await _tap(tester, find.byKey(const Key('guest_more_colors')));
+      await _tap(tester, find.byKey(const Key('guest_custom_match_Blue')));
+      await _tap(tester, find.byKey(const Key('guest_continue')));
+      await _tap(tester, find.byKey(const Key('guest_back')));
+      await _tap(tester, find.byKey(const Key('guest_continue')));
+      await _tap(tester, find.byKey(const Key('guest_generate')));
+      final outfit = tester
+          .widget<GuestOutfitCard>(find.byType(GuestOutfitCard))
+          .outfit;
+      expect(outfit.pants.colorName, 'Navy');
+      expect(outfit.shirt.name, 'Blue');
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'invalid height is revealed when optional settings are collapsed',
+    (tester) async {
+      await _pump(tester);
+      await _toOccasion(tester);
+      await _openOptions(tester);
+      await tester.enterText(find.byKey(const Key('guest_height')), 'NaN');
+      await _tap(tester, find.text('Style and fit (optional)'));
+      expect(find.byKey(const Key('guest_height')), findsNothing);
+      await _tap(tester, find.byKey(const Key('guest_generate')));
+      expect(find.byType(GuestOutfitCard), findsNothing);
+      expect(find.textContaining('between 100 and 250'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
+
+Future<void> _openOptions(WidgetTester tester) async {
+  if (find.byKey(const Key('guest_height')).evaluate().isEmpty) {
+    await _tap(tester, find.text('Style and fit (optional)'));
+  }
+}
+
+Future<void> _showAll(WidgetTester tester) =>
+    _tap(tester, find.byKey(const Key('guest_more_outfits')));
 
 Future<ShirtColor> _toOccasion(
   WidgetTester tester, {
@@ -260,7 +365,12 @@ Future<ShirtColor> _toOccasion(
   final match = const StyleEngine()
       .matchingColors(startingPiece: startingPiece, color: color)
       .first;
-  await _tap(tester, find.byKey(Key('guest_match_${match.name}')));
+  expect(
+    tester
+        .widget<ChoiceChip>(find.byKey(Key('guest_match_${match.name}')))
+        .selected,
+    isTrue,
+  );
   await _tap(tester, find.byKey(const Key('guest_continue')));
   return match;
 }

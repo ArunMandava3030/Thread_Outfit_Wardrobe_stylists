@@ -207,7 +207,9 @@ class OutfitArt extends StatelessWidget {
     height: height,
     child: LayoutBuilder(
       builder: (context, constraints) {
-        final scale = (constraints.maxWidth / 320).clamp(.6, 1.3);
+        final widthScale = (constraints.maxWidth / 320).clamp(.6, 1.3);
+        final heightScale = ((constraints.maxHeight - 48) / 180).clamp(.3, 1.3);
+        final scale = widthScale < heightScale ? widthScale : heightScale;
         return Stack(
           alignment: Alignment.center,
           children: [

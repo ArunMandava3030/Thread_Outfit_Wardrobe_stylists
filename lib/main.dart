@@ -89,6 +89,7 @@ class _StyleHomeState extends State<StyleHome> {
   Completer<void>? _writeFinished;
   bool _includeLayer = true;
   bool _generated = false;
+  bool _showMoreOutfits = false;
   int _page = 0;
   int _profileVersion = 0;
   ShirtColor _shirt = ShirtColor.presets.first;
@@ -247,6 +248,7 @@ class _StyleHomeState extends State<StyleHome> {
     update();
     _generated = false;
     _outfits = [];
+    _showMoreOutfits = false;
     if (_studioStep == 3) _studioStep = 2;
   });
 
@@ -261,7 +263,18 @@ class _StyleHomeState extends State<StyleHome> {
   }
 
   void _goToStep(int step) {
-    setState(() => _studioStep = step);
+    setState(() {
+      if (step == 1 && _matchingColor == null) {
+        _matchingColor = const StyleEngine()
+            .matchingColors(
+              startingPiece: _startingPiece,
+              color: _shirt,
+              profile: _profile,
+            )
+            .first;
+      }
+      _studioStep = step;
+    });
     if (_scroll.hasClients) _scroll.jumpTo(0);
   }
 
@@ -576,7 +589,8 @@ class _StyleHomeState extends State<StyleHome> {
       _studioStep = 1;
     });
     _navigate(0);
-    _message('Starting with ${item.name}. Choose a matching color next.');
+    _goToStep(1);
+    _message('Starting with ${item.name}. A matching color is ready.');
   }
 
   Future<void> _chooseWeather() async {
@@ -785,6 +799,7 @@ class _StyleHomeState extends State<StyleHome> {
           ? const WardrobeStylist().rankByOwnership(candidates, _wardrobe)
           : candidates;
       _generated = true;
+      _showMoreOutfits = false;
       _studioStep = 3;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -805,110 +820,116 @@ class _StyleHomeState extends State<StyleHome> {
     final wide =
         MediaQuery.sizeOf(context).width >=
         940 * MediaQuery.textScalerOf(context).scale(1);
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            _header(wide),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : SingleChildScrollView(
-                      keyboardDismissBehavior:
-                          ScrollViewKeyboardDismissBehavior.onDrag,
-                      controller: _scroll,
-                      padding: EdgeInsets.fromLTRB(
-                        wide ? 42 : 20,
-                        wide ? 38 : 26,
-                        wide ? 42 : 20,
-                        40,
-                      ),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: _page == 2 ? 730 : 1160,
+    return PopScope<void>(
+      canPop: _page == 0 && _studioStep == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_page == 2 || _page == 3 || _page == 4) {
+          _navigate(5);
+        } else if (_page != 0) {
+          _navigate(0);
+        } else if (_studioStep > 0) {
+          _goToStep(_studioStep - 1);
+        }
+      },
+      child: Scaffold(
+        body: SafeArea(
+          child: Column(
+            children: [
+              _header(wide),
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : SingleChildScrollView(
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        controller: _scroll,
+                        padding: EdgeInsets.fromLTRB(
+                          wide ? 42 : 20,
+                          wide ? 28 : 16,
+                          wide ? 42 : 20,
+                          40,
+                        ),
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: _page == 0 || _page == 2 || _page == 5
+                                  ? 730
+                                  : 1160,
+                            ),
+                            child: switch (_page) {
+                              1 => _savedPage(),
+                              5 => _morePage(),
+                              3 => PlannerScreen(
+                                plans: _plans,
+                                onRemove: _removePlan,
+                                onEdit: (plan) =>
+                                    _plan(plan.outfit, existing: plan),
+                                onBrowse: () => _navigate(0),
+                              ),
+                              4 => WardrobeScreen(
+                                items: _wardrobe,
+                                onSave: _saveWardrobe,
+                                onRemove: _removeWardrobe,
+                                onWear: _wear,
+                              ),
+                              2 => ProfileScreen(
+                                key: ValueKey(_profileVersion),
+                                profile: _profile,
+                                onSave: _saveProfile,
+                                onAnalyze:
+                                    ({
+                                      bool sampleSkin = false,
+                                      bool measureBody = false,
+                                    }) => _pickPhoto(
+                                      sampleSkin: sampleSkin,
+                                      measureBody: measureBody,
+                                    ),
+                                onClear: _clearData,
+                              ),
+                              _ => _studio(wide),
+                            },
                           ),
-                          child: switch (_page) {
-                            1 => _savedPage(),
-                            3 => PlannerScreen(
-                              plans: _plans,
-                              onRemove: _removePlan,
-                              onEdit: (plan) =>
-                                  _plan(plan.outfit, existing: plan),
-                              onBrowse: () => _navigate(0),
-                            ),
-                            4 => WardrobeScreen(
-                              items: _wardrobe,
-                              onSave: _saveWardrobe,
-                              onRemove: _removeWardrobe,
-                              onWear: _wear,
-                            ),
-                            2 => ProfileScreen(
-                              key: ValueKey(_profileVersion),
-                              profile: _profile,
-                              onSave: _saveProfile,
-                              onAnalyze:
-                                  ({
-                                    bool sampleSkin = false,
-                                    bool measureBody = false,
-                                  }) => _pickPhoto(
-                                    sampleSkin: sampleSkin,
-                                    measureBody: measureBody,
-                                  ),
-                              onClear: _clearData,
-                            ),
-                            _ => _studio(wide),
-                          },
                         ),
                       ),
-                    ),
-            ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: wide
-          ? null
-          : NavigationBar(
-              selectedIndex: _page,
-              onDestinationSelected: _navigate,
-              backgroundColor: Colors.white,
-              indicatorColor: ThreadTheme.lime,
-              labelTextStyle: const WidgetStatePropertyAll(
-                TextStyle(fontSize: 10),
               ),
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.auto_awesome_outlined),
-                  selectedIcon: Icon(Icons.auto_awesome),
-                  label: 'Style studio',
+            ],
+          ),
+        ),
+        bottomNavigationBar: wide
+            ? null
+            : NavigationBar(
+                selectedIndex: _page < 2 ? _page : 2,
+                onDestinationSelected: (index) =>
+                    _navigate(index == 2 ? 5 : index),
+                backgroundColor: Colors.white,
+                indicatorColor: ThreadTheme.lime,
+                labelTextStyle: const WidgetStatePropertyAll(
+                  TextStyle(fontSize: 10),
                 ),
-                NavigationDestination(
-                  icon: Icon(Icons.bookmark_border_rounded),
-                  selectedIcon: Icon(Icons.bookmark_rounded),
-                  label: 'Saved looks',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.person_outline_rounded),
-                  selectedIcon: Icon(Icons.person_rounded),
-                  label: 'My profile',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.calendar_month_outlined),
-                  selectedIcon: Icon(Icons.calendar_month),
-                  label: 'Planner',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.checkroom_outlined),
-                  selectedIcon: Icon(Icons.checkroom),
-                  label: 'Wardrobe',
-                ),
-              ],
-            ),
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.auto_awesome_outlined),
+                    selectedIcon: Icon(Icons.auto_awesome),
+                    label: 'Outfits',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.favorite_border),
+                    selectedIcon: Icon(Icons.favorite),
+                    label: 'Saved',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.more_horiz),
+                    label: 'More',
+                  ),
+                ],
+              ),
+      ),
     );
   }
 
   Widget _header(bool wide) => Container(
-    padding: EdgeInsets.symmetric(horizontal: wide ? 44 : 22, vertical: 17),
+    padding: EdgeInsets.symmetric(horizontal: wide ? 44 : 22, vertical: 8),
     decoration: const BoxDecoration(
       color: Colors.white,
       border: Border(bottom: BorderSide(color: ThreadTheme.line)),
@@ -950,26 +971,17 @@ class _StyleHomeState extends State<StyleHome> {
         if (wide) ...[
           const SizedBox(width: 18),
           for (final (index, label) in [
-            'Style studio',
-            'Saved looks',
-            'My profile',
-            'Planner',
-            'Wardrobe',
-          ].indexed)
+            (0, 'Outfits'),
+            (1, 'Saved'),
+            (5, 'More'),
+          ])
             Padding(
-              padding: const EdgeInsets.only(right: 2),
+              padding: const EdgeInsets.only(right: 4),
               child: TextButton(
                 style: TextButton.styleFrom(
-                  foregroundColor: _page == index
-                      ? ThreadTheme.ink
-                      : ThreadTheme.muted,
-                  backgroundColor: _page == index
+                  backgroundColor: (_page == index || (index == 5 && _page > 1))
                       ? ThreadTheme.softGreen
                       : null,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 16,
-                  ),
                 ),
                 onPressed: () => _navigate(index),
                 child: Text(label),
@@ -994,64 +1006,73 @@ class _StyleHomeState extends State<StyleHome> {
     ),
   );
 
+  Widget _morePage() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text('Make it yours', style: Theme.of(context).textTheme.headlineMedium),
+      const SizedBox(height: 8),
+      const Text('Your profile, wardrobe and plans, whenever you need them.'),
+      const SizedBox(height: 20),
+      SurfaceCard(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: const Text('My profile'),
+              subtitle: Text(
+                _configured
+                    ? 'Your height, skin tone and fit preferences'
+                    : 'Add your height and fit preferences',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _navigate(2),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.checkroom_outlined),
+              title: const Text('Wardrobe'),
+              subtitle: const Text('Create looks with clothes you own'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _navigate(4),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.calendar_month_outlined),
+              title: const Text('Planner'),
+              subtitle: const Text('Outfits for upcoming days'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _navigate(3),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+
   Widget _studio(bool wide) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      Wrap(
+        spacing: 16,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Row(
-                  children: [
-                    Icon(
-                      Icons.wb_sunny_outlined,
-                      size: 15,
-                      color: ThreadTheme.green,
-                    ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Eyebrow(
-                        'A good day to get dressed',
-                        color: ThreadTheme.green,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 15),
-                Text(
-                  'One piece.\nYour whole outfit.',
-                  style: wide
-                      ? Theme.of(context).textTheme.displayLarge
-                      : Theme.of(context).textTheme.displayMedium,
-                ),
-                const SizedBox(height: 15),
-                const Text(
-                  'Start with what you’re wearing. Find the colors,\npieces, and little details that bring it all together.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.6,
-                    color: ThreadTheme.muted,
-                  ),
-                ),
-              ],
-            ),
+          Text(
+            'Build an outfit',
+            style: Theme.of(context).textTheme.headlineMedium,
           ),
-          if (wide) SizedBox(width: 260, child: _profileSummary()),
+          TextButton.icon(
+            key: const Key('open_outfit_rating'),
+            onPressed: () => _openRating(),
+            icon: const Icon(Icons.star_outline_rounded, size: 20),
+            label: const Text('Rate outfit'),
+          ),
         ],
       ),
-      const SizedBox(height: 16),
-      OutlinedButton.icon(
-        key: const Key('open_outfit_rating'),
-        onPressed: () => _openRating(),
-        icon: const Icon(Icons.star_outline_rounded),
-        label: const Text('Already dressed? Rate my outfit'),
-      ),
-      const SizedBox(height: 24),
+      const SizedBox(height: 12),
       _studioProgress(),
-      const SizedBox(height: 20),
+      const SizedBox(height: 16),
       if (_studioStep == 0)
         _shirtPanel()
       else if (_studioStep == 1)
@@ -1060,39 +1081,26 @@ class _StyleHomeState extends State<StyleHome> {
         _occasionPanel()
       else if (_generated)
         _results(),
-      const SizedBox(height: 18),
-      Wrap(
-        spacing: 12,
-        runSpacing: 10,
-        children: [
-          if (_studioStep > 0)
-            OutlinedButton.icon(
-              key: const Key('studio_back'),
-              onPressed: () => _goToStep(_studioStep - 1),
-              icon: const Icon(Icons.arrow_back_rounded),
-              label: Text(_studioStep == 3 ? 'Edit occasion & layers' : 'Back'),
+      if (_studioStep < 2) ...[
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            key: const Key('studio_next'),
+            onPressed: () => _goToStep(_studioStep + 1),
+            icon: const Icon(Icons.arrow_forward_rounded),
+            label: Text(
+              _studioStep == 0 ? 'Find matching colors' : 'Choose occasion',
             ),
-          if (_studioStep < 2)
-            FilledButton.icon(
-              key: const Key('studio_next'),
-              onPressed: _studioStep == 1 && _matchingColor == null
-                  ? null
-                  : () => _goToStep(_studioStep + 1),
-              icon: const Icon(Icons.arrow_forward_rounded),
-              label: Text(
-                _studioStep == 0
-                    ? 'Find matching ${_startingPiece == StartingPiece.pants ? 'tops' : 'pants'}'
-                    : 'Choose the occasion',
-              ),
-            ),
-        ],
-      ),
-      const SizedBox(height: 22),
+          ),
+        ),
+      ],
+      const SizedBox(height: 16),
       ExpansionTile(
         key: const Key('studio_personalization'),
         tilePadding: EdgeInsets.zero,
-        title: const Text('Style, weather & personal preferences'),
-        subtitle: const Text('Optional extras for your next outfit'),
+        title: const Text('More options'),
+        subtitle: const Text('Style, weather and trends'),
         children: [
           _contextPanels(wide),
           const SizedBox(height: 16),
@@ -1100,46 +1108,63 @@ class _StyleHomeState extends State<StyleHome> {
           const SizedBox(height: 16),
         ],
       ),
-      const SizedBox(height: 30),
-      Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.spa_outlined, size: 15, color: ThreadTheme.muted),
-          const SizedBox(width: 7),
-          Flexible(
-            child: Text(
-              'Wear what feels like you. We’ll help with the rest.',
-              style: Theme.of(context).textTheme.bodySmall,
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ],
-      ),
     ],
   );
 
-  Widget _studioProgress() => Wrap(
-    spacing: 8,
-    runSpacing: 8,
-    children: [
-      for (final (index, label) in [
-        'Your starting piece',
-        'Matching colors',
-        'The occasion',
-        'Your outfits',
-      ].indexed)
-        ChoiceChip(
-          key: Key('studio_step_$index'),
-          label: Text('${index + 1}. $label'),
-          selected: _studioStep == index,
-          onSelected:
-              (index == 2 && _matchingColor == null) ||
-                  (index == 3 && !_generated)
-              ? null
-              : (_) => _goToStep(index),
-        ),
-    ],
-  );
+  Widget _studioProgress() => _studioStep == 3
+      ? Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            TextButton.icon(
+              key: const Key('studio_back'),
+              onPressed: () => _goToStep(2),
+              icon: const Icon(Icons.arrow_back),
+              label: const Text('Edit occasion'),
+            ),
+            TextButton(
+              key: const Key('start_new_outfit'),
+              onPressed: () => _goToStep(0),
+              child: const Text('Start again'),
+            ),
+          ],
+        )
+      : Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                if (_studioStep > 0) ...[
+                  IconButton(
+                    key: const Key('studio_back'),
+                    tooltip: 'Back',
+                    onPressed: () => _goToStep(_studioStep - 1),
+                    icon: const Icon(Icons.arrow_back),
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                Expanded(
+                  child: Text(
+                    '${_studioStep + 1} of 3 · ${['Your starting piece', 'Matching color', 'Occasion'][_studioStep]}',
+                    style: const TextStyle(
+                      color: ThreadTheme.muted,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (_studioStep < 3) ...[
+              const SizedBox(height: 8),
+              LinearProgressIndicator(
+                value: (_studioStep + 1) / 3,
+                minHeight: 3,
+                backgroundColor: ThreadTheme.line,
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ],
+          ],
+        );
 
   Widget _matchingPanel() {
     final colors = const StyleEngine().matchingColors(
@@ -1152,15 +1177,13 @@ class _StyleHomeState extends State<StyleHome> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Eyebrow('02 / Make the pairing'),
-          const SizedBox(height: 8),
           Text(
             'Choose your $other color',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 10),
           Text(
-            'Keeping your ${_shirt.name.toLowerCase()} ${_startingPiece == StartingPiece.pants ? 'pants' : 'shirt'}. Pick a suggested match or another color you love.',
+            'Keeping your ${_shirt.name.toLowerCase()} ${_startingPiece == StartingPiece.pants ? 'pants' : 'shirt'}. A suggested match is selected; change it if you like.',
           ),
           const SizedBox(height: 20),
           Wrap(
@@ -1203,7 +1226,7 @@ class _StyleHomeState extends State<StyleHome> {
           if (_matchingColor != null) ...[
             const SizedBox(height: 14),
             Text(
-              '${_matchingColor!.name} $other selected. Next, dress it for your plans.',
+              '${_matchingColor!.name} $other selected',
               style: const TextStyle(
                 color: ThreadTheme.green,
                 fontWeight: FontWeight.w600,
@@ -1291,11 +1314,6 @@ class _StyleHomeState extends State<StyleHome> {
           spacing: 8,
           runSpacing: 4,
           children: [
-            FilledButton.tonalIcon(
-              onPressed: _generate,
-              icon: const Icon(Icons.auto_awesome, size: 17),
-              label: const Text('Create my outfit edit'),
-            ),
             if (_feedback.isNotEmpty)
               TextButton(
                 onPressed: _writing ? null : _resetLearning,
@@ -1312,79 +1330,16 @@ class _StyleHomeState extends State<StyleHome> {
     ),
   );
 
-  Widget _profileSummary() => SurfaceCard(
-    color: ThreadTheme.softGreen,
-    padding: const EdgeInsets.all(20),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.tune_rounded, size: 16),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Eyebrow(
-                _configured ? 'Made for you' : 'Make it personal',
-                color: ThreadTheme.green,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 13),
-        Text(
-          _configured
-              ? '${_profile.heightCm.round()} cm · Your fit'
-              : 'Good style starts\nwith your details.',
-          style: const TextStyle(
-            fontSize: 19,
-            fontWeight: FontWeight.w600,
-            height: 1.3,
-            letterSpacing: -.5,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _configured
-              ? (_profile.bodyShape?.label ?? 'Easy, comfortable proportions')
-              : 'Add your height, proportions, and optional color profile.',
-          style: const TextStyle(
-            fontSize: 12,
-            color: ThreadTheme.muted,
-            height: 1.5,
-          ),
-        ),
-        const SizedBox(height: 10),
-        TextButton(
-          onPressed: () => _navigate(2),
-          style: TextButton.styleFrom(padding: EdgeInsets.zero),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Text(
-                  _configured ? 'Edit my profile' : 'Build my profile',
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Icon(Icons.arrow_forward_rounded, size: 16),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-
   Widget _shirtPanel() => SurfaceCard(
+    padding: const EdgeInsets.all(18),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Eyebrow('01 / The starting point'),
-        const SizedBox(height: 8),
         Text(
-          'What are you wearing?',
+          'What are you starting with?',
           style: Theme.of(context).textTheme.titleLarge,
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
         Wrap(
           spacing: 10,
           runSpacing: 8,
@@ -1400,242 +1355,116 @@ class _StyleHomeState extends State<StyleHome> {
               ),
           ],
         ),
-        const SizedBox(height: 18),
-        Container(
-          height: 215,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: const Color(0xFFF0F1E8),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Positioned(
-                right: -22,
-                top: -35,
-                child: Container(
-                  width: 185,
-                  height: 185,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFFE0E4D5)),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: -50,
-                bottom: -85,
-                child: Container(
-                  width: 240,
-                  height: 240,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFFE0E4D5)),
-                  ),
-                ),
-              ),
-              if (_photo != null)
-                Image.memory(
-                  _photo!,
-                  height: 215,
-                  width: double.infinity,
-                  fit: BoxFit.contain,
-                  cacheWidth: 700,
-                  errorBuilder: (_, error, stack) => GarmentArt(
-                    kind: _startingPiece == StartingPiece.pants
-                        ? GarmentKind.pants
-                        : GarmentKind.shirt,
-                    color: Color(_shirt.argb),
-                    size: 200,
-                  ),
-                )
-              else
-                Transform.rotate(
-                  angle: -.08,
-                  child: GarmentArt(
-                    kind: _startingPiece == StartingPiece.pants
-                        ? GarmentKind.pants
-                        : GarmentKind.shirt,
-                    color: Color(_shirt.argb),
-                    size: 214,
-                  ),
-                ),
-              Positioned(
-                bottom: 12,
-                left: 12,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: .92),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _photo != null
-                            ? Icons.colorize_rounded
-                            : Icons.check_circle_outline,
-                        size: 13,
-                        color: ThreadTheme.green,
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        _photo != null
-                            ? 'Photo color sampled'
-                            : 'Try a color to get started',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: ThreadTheme.green,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              if (_photo != null)
-                Positioned(
-                  right: 4,
-                  top: 4,
-                  child: IconButton.filledTonal(
-                    tooltip: 'Remove photo',
-                    onPressed: () => setState(() => _photo = null),
-                    icon: const Icon(Icons.close, size: 16),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
         Row(
           children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: 72,
+                height: 72,
+                color: ThreadTheme.softGreen,
+                child: _photo == null
+                    ? GarmentArt(
+                        kind: _startingPiece == StartingPiece.pants
+                            ? GarmentKind.pants
+                            : GarmentKind.shirt,
+                        color: Color(_shirt.argb),
+                        size: 70,
+                      )
+                    : Image.memory(
+                        _photo!,
+                        fit: BoxFit.contain,
+                        cacheWidth: 180,
+                      ),
+              ),
+            ),
+            const SizedBox(width: 14),
             Expanded(
-              child: FilledButton.icon(
-                key: const Key('add_photo'),
-                onPressed: _picking ? null : () => _pickPhoto(),
-                icon: Icon(
-                  _picking
-                      ? Icons.hourglass_top_rounded
-                      : Icons.add_a_photo_outlined,
-                  size: 17,
-                ),
-                label: Text(_picking ? 'Opening photo…' : 'Add your photo'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${_shirt.name} ${_startingPiece.itemLabel.toLowerCase()}',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Choose its color below.',
+                    style: TextStyle(color: ThreadTheme.muted),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 10),
-            IconButton.outlined(
-              tooltip: 'Choose from gallery',
-              onPressed: _picking
-                  ? null
-                  : () => _pickPhoto(source: ImageSource.gallery),
-              style: IconButton.styleFrom(
-                minimumSize: const Size(50, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                side: const BorderSide(color: ThreadTheme.line),
-              ),
-              icon: const Icon(Icons.photo_library_outlined, size: 21),
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Or pick your ${_startingPiece == StartingPiece.pants ? 'pants' : 'shirt'} color',
-                style: const TextStyle(fontSize: 12, color: ThreadTheme.muted),
-              ),
-            ),
-            Container(
-              width: 9,
-              height: 9,
-              decoration: BoxDecoration(
-                color: Color(_shirt.argb),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.black12),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              _shirt.name,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
           ],
         ),
         const SizedBox(height: 12),
         Wrap(
-          spacing: 7,
-          runSpacing: 7,
-          children: ShirtColor.presets
-              .map(
-                (color) => Tooltip(
+          spacing: 2,
+          runSpacing: 2,
+          children: [
+            for (final color in ShirtColor.presets)
+              Semantics(
+                button: true,
+                selected: _shirt.argb == color.argb,
+                label:
+                    '${color.name} ${_startingPiece.itemLabel.toLowerCase()}',
+                child: Tooltip(
                   message: color.name,
-                  child: Semantics(
-                    button: true,
-                    selected: _shirt.argb == color.argb,
-                    label:
-                        '${color.name} ${_startingPiece == StartingPiece.pants ? 'pants' : 'shirt'}',
-                    child: InkWell(
-                      key: Key('starting_color_${color.name}'),
-                      onTap: () => _chooseAnchor(color),
-                      borderRadius: BorderRadius.circular(24),
-                      child: SizedBox.square(
-                        dimension: 36,
-                        child: Center(
-                          child: Container(
-                            width: 29,
-                            height: 29,
-                            decoration: BoxDecoration(
-                              color: Color(color.argb),
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: _shirt.argb == color.argb
-                                    ? ThreadTheme.green
-                                    : Colors.black12,
-                                width: _shirt.argb == color.argb ? 2 : 1,
-                              ),
+                  child: InkWell(
+                    key: Key('starting_color_${color.name}'),
+                    onTap: () => _chooseAnchor(color),
+                    borderRadius: BorderRadius.circular(24),
+                    child: SizedBox.square(
+                      dimension: 44,
+                      child: Center(
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: Color(color.argb),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: _shirt.argb == color.argb
+                                  ? ThreadTheme.green
+                                  : Colors.black12,
+                              width: _shirt.argb == color.argb ? 2 : 1,
                             ),
-                            child: _shirt.argb == color.argb
-                                ? Icon(
-                                    Icons.check_rounded,
-                                    size: 17,
-                                    color:
-                                        Color(color.argb).computeLuminance() <
-                                            .35
-                                        ? Colors.white
-                                        : ThreadTheme.ink,
-                                  )
-                                : null,
                           ),
+                          child: _shirt.argb == color.argb
+                              ? Icon(
+                                  Icons.check,
+                                  size: 18,
+                                  color:
+                                      Color(color.argb).computeLuminance() < .35
+                                      ? Colors.white
+                                      : ThreadTheme.ink,
+                                )
+                              : null,
                         ),
                       ),
                     ),
                   ),
                 ),
-              )
-              .toList(),
-        ),
-        const SizedBox(height: 13),
-        const Row(
-          children: [
-            Icon(
-              Icons.lock_outline_rounded,
-              size: 12,
-              color: ThreadTheme.muted,
-            ),
-            SizedBox(width: 5),
-            Expanded(
-              child: Text(
-                'On-device sampling. Your photos stay with you.',
-                style: TextStyle(fontSize: 10, color: ThreadTheme.muted),
               ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: [
+            TextButton.icon(
+              key: const Key('add_photo'),
+              onPressed: _picking ? null : () => _pickPhoto(),
+              icon: const Icon(Icons.add_a_photo_outlined, size: 18),
+              label: Text(_picking ? 'Opening photo…' : 'Use a photo'),
+            ),
+            IconButton(
+              tooltip: 'Choose from gallery',
+              onPressed: _picking
+                  ? null
+                  : () => _pickPhoto(source: ImageSource.gallery),
+              icon: const Icon(Icons.photo_library_outlined, size: 20),
             ),
           ],
         ),
@@ -1644,11 +1473,10 @@ class _StyleHomeState extends State<StyleHome> {
   );
 
   Widget _occasionPanel() => SurfaceCard(
+    padding: const EdgeInsets.all(18),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Eyebrow('03 / Set the scene'),
-        const SizedBox(height: 8),
         Text(
           'Where are you headed?',
           style: Theme.of(context).textTheme.titleLarge,
@@ -1657,123 +1485,36 @@ class _StyleHomeState extends State<StyleHome> {
         Text(
           '${_shirt.name} ${_startingPiece == StartingPiece.pants ? 'pants' : 'shirt'} + '
           '${_matchingColor?.name ?? ''} ${_startingPiece == StartingPiece.pants ? 'top' : 'pants'}. '
-          'Now choose where you’ll wear them.',
+          '',
           style: const TextStyle(fontSize: 12, color: ThreadTheme.muted),
         ),
         const SizedBox(height: 18),
-        LayoutBuilder(
-          builder: (context, constraints) => Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: Occasion.values.map((occasion) {
-              final selected = occasion == _occasion;
-              return SizedBox(
-                width: (constraints.maxWidth - 10) / 2,
-                child: Material(
-                  color: selected ? ThreadTheme.softGreen : Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(13),
-                    side: BorderSide(
-                      color: selected ? ThreadTheme.green : ThreadTheme.line,
-                      width: selected ? 1.3 : 1,
-                    ),
-                  ),
-                  child: InkWell(
-                    key: ValueKey('occasion_${occasion.name}'),
-                    borderRadius: BorderRadius.circular(13),
-                    onTap: () => _invalidate(() => _occasion = occasion),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 15,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            occasionIcon(occasion),
-                            size: 19,
-                            color: selected
-                                ? ThreadTheme.green
-                                : ThreadTheme.muted,
-                          ),
-                          const SizedBox(width: 9),
-                          Expanded(
-                            child: Text(
-                              occasion.label,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: selected
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                              ),
-                            ),
-                          ),
-                          if (selected)
-                            const Icon(
-                              Icons.check_circle,
-                              size: 15,
-                              color: ThreadTheme.green,
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            for (final occasion in Occasion.values)
+              ChoiceChip(
+                key: ValueKey('occasion_${occasion.name}'),
+                avatar: Icon(occasionIcon(occasion), size: 17),
+                label: Text(occasion.label),
+                selected: occasion == _occasion,
+                onSelected: (_) => _invalidate(() => _occasion = occasion),
+              ),
+          ],
         ),
         const SizedBox(height: 15),
         SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,
           dense: true,
           title: const Text(
-            'Add a layering option',
+            'Include a layer',
             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-          ),
-          subtitle: const Text(
-            'That extra piece to finish the look.',
-            style: TextStyle(fontSize: 11, color: ThreadTheme.muted),
           ),
           value: _includeLayer,
           onChanged: (value) => _invalidate(() => _includeLayer = value),
         ),
         const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: ThreadTheme.canvas,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.tune_rounded,
-                size: 18,
-                color: ThreadTheme.muted,
-              ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Text(
-                  _configured
-                      ? 'Tailored to your ${_profile.heightCm.round()} cm profile'
-                      : 'Add your height for a more personal fit',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: ThreadTheme.muted,
-                  ),
-                ),
-              ),
-              InkWell(
-                onTap: () => _navigate(2),
-                child: const Padding(
-                  padding: EdgeInsets.all(6),
-                  child: Icon(Icons.arrow_forward_rounded, size: 17),
-                ),
-              ),
-            ],
-          ),
-        ),
         const SizedBox(height: 18),
         SizedBox(
           width: double.infinity,
@@ -1781,14 +1522,7 @@ class _StyleHomeState extends State<StyleHome> {
             key: const Key('generate_outfits'),
             onPressed: _generate,
             icon: const Icon(Icons.auto_awesome, size: 18),
-            label: const Text('Find my outfits'),
-          ),
-        ),
-        const SizedBox(height: 10),
-        const Center(
-          child: Text(
-            'Three combinations. A little inspiration. All you.',
-            style: TextStyle(fontSize: 10, color: ThreadTheme.muted),
+            label: const Text('Show my outfit'),
           ),
         ),
       ],
@@ -1799,26 +1533,31 @@ class _StyleHomeState extends State<StyleHome> {
     key: _resultsKey,
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Eyebrow('04 / Finish & favorite'),
-      const SizedBox(height: 10),
       Text(
-        'A few ways to wear it.',
-        style: Theme.of(context).textTheme.headlineMedium,
+        '${_occasion.label} · ${_shirt.name} ${_startingPiece.itemLabel.toLowerCase()}',
+        style: const TextStyle(color: ThreadTheme.muted),
       ),
-      const SizedBox(height: 8),
-      Text(
-        '${_shirt.name} ${_startingPiece == StartingPiece.pants ? 'pants' : 'shirt'}. '
-        '${_occasion.label}. Favorite a finished look or rate it for more advice.',
-        style: const TextStyle(fontSize: 13, color: ThreadTheme.muted),
-      ),
-      const SizedBox(height: 22),
-      _outfitGrid(_outfits),
+      const SizedBox(height: 12),
+      _outfitGrid(_showMoreOutfits ? _outfits : _outfits.take(1).toList()),
+      if (_outfits.length > 1 && !_showMoreOutfits) ...[
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            key: const Key('show_more_outfits'),
+            onPressed: () => setState(() => _showMoreOutfits = true),
+            child: Text('Show ${_outfits.length - 1} more outfits'),
+          ),
+        ),
+      ],
     ],
   );
 
   Widget _outfitGrid(List<OutfitRecommendation> outfits) => LayoutBuilder(
     builder: (context, constraints) {
-      final columns = constraints.maxWidth > 950
+      final columns = outfits.length == 1
+          ? 1
+          : constraints.maxWidth > 950
           ? 3
           : constraints.maxWidth > 620
           ? 2
@@ -1888,7 +1627,7 @@ class _StyleHomeState extends State<StyleHome> {
                 ),
                 const SizedBox(height: 10),
                 const Text(
-                  'Create an outfit and tap the bookmark to keep it here.',
+                  'Create an outfit and tap Favorite outfit to keep it here.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 20),

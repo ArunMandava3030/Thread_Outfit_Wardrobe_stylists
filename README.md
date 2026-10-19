@@ -26,14 +26,14 @@ Then open http://127.0.0.1:8080. Flutter 3.35.7 / Dart 3.9.2 was used here. Comm
 
 ## Using the app
 
-1. Choose **Shirt first** or **Pants first** and set the color of the piece you are keeping. Shirt photos retain automatic torso sampling with manual correction. Pants photos use an explicit tap on the pants so a torso sample is never mistaken for trousers. Color swatches are always available.
-2. Choose a suggested complementary top/pants color, or open **More colors**. Continue to the occasion after selecting a match. Back navigation retains your choices; changing the starting item clears the previous pairing.
-3. Choose **Office**, **Date night**, **Party**, **Special occasion**, **Casual outing**, **Beach day**, or **Bike ride**, and choose whether to add a layer. Generate three finishing options. Both selected colors and the garment you are keeping stay fixed when style or weather changes.
-4. Use **Favorite outfit** to keep the finished look in **Saved looks**. Existing bookmarks, profiles, votes, wardrobe entries and plans remain compatible with this update. You can also plan the outfit or give a like/dislike to teach future recommendations.
-5. Select **Already dressed? Rate my outfit**, or **Rate this outfit** on a suggestion. Confirm the actual garment types and colors, occasion and optional fit observations, then review the rating and suggested improvements. Photos can supply individual garment colors; the same outfit photo can be reused for multiple samples.
-6. Add your height in centimeters or inches under **My profile**. Optionally choose/sample a skin tone and select a known undertone. For proportions, use the automatic shoulder-to-hip guide, choose a description, or mark shoulder, waist and hip edges. These existing profile tools remain available. Skipping the profile during generation uses a disclosed 175 cm default.
-7. Open **Style, weather & personal preferences** for style directions, optional Wikipedia introductions, current city weather and dated fashion headlines. These extras do not interrupt the guided pairing flow.
-8. In **Wardrobe**, use **Wear this shirt** or **Wear these pants** to start from an owned item. **Plan look** stores an outfit for a date and an optional note; **Planner** manages these snapshots.
+1. In **Outfits**, choose **Shirt first** or **Pants first**, then choose its color or **Use a photo**. Shirt photos retain automatic torso sampling with manual correction. Pants photos use an explicit tap on the pants.
+2. A suggested matching color is already selected. Keep it, tap another suggestion, or open **More colors**, then continue. Back retains your choices; changing the starting item selects a fresh recommendation the next time you continue.
+3. Choose your occasion and whether to include a layer, then **Show my outfit**. One suggested look appears first; **Show 2 more outfits** reveals alternatives. Both chosen colors and the starting garment remain fixed.
+4. **Favorite outfit** saves the look under **Saved**. **Outfit details** groups rating, planning, feedback and explanations. Your existing profile, favorites, votes, wardrobe and plans remain compatible.
+5. Tap **Rate outfit**, or **Rate this outfit** inside outfit details. Review four compact garment summaries and the occasion. **Edit** opens one garment's type, color and photo controls; **Done** applies the changes and **Cancel** discards them. Optional fit observations, style and trend controls are under **More options**. Rating shows the score and suggestions directly; **Edit outfit** returns to the same choices.
+6. **More** groups **My profile**, **Wardrobe** and **Planner**. Profile tools still support height in centimeters or inches, skin-tone sampling, undertone, and shoulder/waist/hip proportions. Skipping the profile during generation uses a disclosed 175 cm default.
+7. Open **More options** in the outfit builder for styles, current weather, learning and dated fashion headlines. In the public preview, optional style, height and headlines are under **Style and fit (optional)** on the occasion step.
+8. In **Wardrobe**, **Wear this shirt** or **Wear these pants** starts from an owned item. **Plan look** stores an outfit for a date and optional note; **Planner** manages these snapshots. Android Back returns to the previous outfit step or the More menu before leaving the app.
 
 ## Outfit ratings
 

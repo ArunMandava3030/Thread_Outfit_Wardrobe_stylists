@@ -3,11 +3,79 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:thread_style/main.dart';
 import 'package:thread_style/models/style_models.dart';
 import 'package:thread_style/models/wardrobe_models.dart';
+import 'package:thread_style/screens/outfit_rating_screen.dart';
 import 'package:thread_style/services/style_engine.dart';
 import 'package:thread_style/services/style_store.dart';
 import 'package:thread_style/widgets/outfit_card.dart';
 
 void main() {
+  testWidgets(
+    'phone quick path uses a ready matching color and reachable Continue buttons',
+    (tester) async {
+      await _mount(tester, _GuidedStore());
+      final next = find.byKey(const Key('studio_next'));
+      expect(next.hitTestable(), findsOneWidget);
+      await tester.tap(next);
+      await tester.pumpAndSettle();
+
+      expect(next.hitTestable(), findsOneWidget);
+      expect(tester.widget<FilledButton>(next).onPressed, isNotNull);
+      expect(
+        tester
+            .widget<ChoiceChip>(find.byKey(const Key('matching_suggestion_0')))
+            .selected,
+        isTrue,
+      );
+      await tester.tap(next);
+      await tester.pumpAndSettle();
+
+      final generate = find.byKey(const Key('generate_outfits'));
+      expect(generate.hitTestable(), findsOneWidget);
+      await tester.tap(generate);
+      await tester.pumpAndSettle();
+      expect(find.byType(OutfitCard), findsOneWidget);
+      expect(find.text('Favorite outfit'), findsOneWidget);
+      expect(find.text('Outfit details'), findsOneWidget);
+      expect(find.text('Plan look'), findsNothing);
+      expect(find.byTooltip('Like this look'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+    variant: TargetPlatformVariant({TargetPlatform.linux}),
+  );
+
+  testWidgets(
+    'system Back returns through outfit steps and the More menu',
+    (tester) async {
+      await _mount(tester, _GuidedStore());
+      await _tap(tester, find.byKey(const Key('studio_next')));
+      expect(find.text('Choose your pants color'), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('starting_piece_shirt')), findsOneWidget);
+
+      await _tap(tester, find.text('More'));
+      await _tap(tester, find.text('My profile'));
+      expect(find.byKey(const Key('height_input')), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('Wardrobe'), findsOneWidget);
+      expect(find.text('Planner'), findsOneWidget);
+      expect(find.byKey(const Key('height_input')), findsNothing);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('starting_piece_shirt')), findsOneWidget);
+      await _tap(tester, find.text('Saved'));
+      expect(find.text('Your next favorite look is waiting.'), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('starting_piece_shirt')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+    variant: TargetPlatformVariant({TargetPlatform.android}),
+  );
+
   testWidgets(
     'studio rating route saves a real favorite that survives navigation and restart',
     (tester) async {
@@ -15,7 +83,9 @@ void main() {
       await _mount(tester, store);
       await _tap(tester, find.byKey(const Key('open_outfit_rating')));
       expect(find.byKey(const Key('rate_current_outfit')), findsOneWidget);
+      await _tap(tester, find.byKey(const Key('rating-edit-Top')));
       await _tap(tester, find.byKey(const ValueKey('rating-Top-color-Blue')));
+      await _tap(tester, find.byKey(const Key('rating-editor-done')));
       await _tap(tester, find.byKey(const Key('rate_current_outfit')));
       final scoreText = tester
           .widget<Text>(find.byKey(const Key('outfit_rating_score')))
@@ -39,7 +109,7 @@ void main() {
       );
 
       await _tap(tester, find.byType(BackButton));
-      await _tap(tester, find.text('Saved looks'));
+      await _tap(tester, find.text('Saved'));
       final savedCard = tester.widget<OutfitCard>(find.byType(OutfitCard));
       expect(savedCard.saved, isTrue);
       expect(savedCard.outfit.toJson(), favorite.toJson());
@@ -48,7 +118,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.pumpWidget(ThreadApp(store: store));
       await tester.pumpAndSettle();
-      await _tap(tester, find.text('Saved looks'));
+      await _tap(tester, find.text('Saved'));
       final restored = tester.widget<OutfitCard>(find.byType(OutfitCard));
       expect(restored.saved, isTrue);
       expect(restored.outfit.toJson(), favorite.toJson());
@@ -72,7 +142,13 @@ void main() {
         tester
             .widget<FilledButton>(find.byKey(const Key('studio_next')))
             .onPressed,
-        isNull,
+        isNotNull,
+      );
+      expect(
+        tester
+            .widget<ChoiceChip>(find.byKey(const Key('matching_suggestion_0')))
+            .selected,
+        isTrue,
       );
       await _tap(tester, find.byKey(const Key('matching_suggestion_1')));
       final expectedTop = const StyleEngine().matchingColors(
@@ -87,6 +163,8 @@ void main() {
         isTrue,
       );
       await _tap(tester, find.byKey(const Key('generate_outfits')));
+      expect(find.byType(OutfitCard), findsOneWidget);
+      await _tap(tester, find.byKey(const Key('show_more_outfits')));
       expect(find.byType(OutfitCard), findsNWidgets(3));
       for (final card in tester.widgetList<OutfitCard>(
         find.byType(OutfitCard),
@@ -103,11 +181,19 @@ void main() {
           .outfit;
       await _tap(tester, find.text('Favorite outfit').first);
       expect(store.saved.single.id, first.id);
+      await _tap(tester, find.text('Outfit details').first);
+      await _tap(tester, find.text('Rate this outfit'));
+      final ratingScreen = tester.widget<OutfitRatingScreen>(
+        find.byType(OutfitRatingScreen),
+      );
+      expect(ratingScreen.initialOutfit?.toJson(), first.toJson());
+      expect(find.byKey(const Key('rate_current_outfit')), findsOneWidget);
+      await _tap(tester, find.byType(BackButton));
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();
       await tester.pumpWidget(ThreadApp(store: store));
       await tester.pumpAndSettle();
-      await _tap(tester, find.text('Saved looks'));
+      await _tap(tester, find.text('Saved'));
       final restored = tester.widget<OutfitCard>(find.byType(OutfitCard));
       expect(restored.saved, isTrue);
       expect(restored.outfit.toJson(), first.toJson());
@@ -131,6 +217,8 @@ void main() {
       await _tap(tester, find.byKey(const Key('occasion_date')));
       await _tap(tester, find.byType(SwitchListTile));
       await _tap(tester, find.byKey(const Key('generate_outfits')));
+      expect(find.byType(OutfitCard), findsOneWidget);
+      await _tap(tester, find.byKey(const Key('show_more_outfits')));
       for (final card in tester.widgetList<OutfitCard>(
         find.byType(OutfitCard),
       )) {
@@ -148,7 +236,7 @@ void main() {
   );
 
   testWidgets(
-    'editing the starting item clears the old match and requires a new pairing',
+    'editing the starting item clears old results and selects a fresh matching default',
     (tester) async {
       await _mount(
         tester,
@@ -157,44 +245,50 @@ void main() {
         textScale: 1.5,
       );
       await _tap(tester, find.byKey(const Key('studio_next')));
-      await _tap(tester, find.byKey(const Key('matching_suggestion_0')));
+      await _tap(tester, find.text('More colors'));
+      await _tap(tester, find.byKey(const Key('matching_color_Burgundy')));
       await _tap(tester, find.byKey(const Key('studio_next')));
       await _tap(tester, find.byKey(const Key('generate_outfits')));
-      expect(find.byType(OutfitCard), findsNWidgets(3));
+      expect(find.byType(OutfitCard), findsOneWidget);
+      expect(
+        tester
+            .widget<OutfitCard>(find.byType(OutfitCard))
+            .outfit
+            .pants
+            .colorArgb,
+        0xFF783B4B,
+      );
       await _tap(tester, find.byKey(const Key('studio_back')));
       expect(find.byKey(const Key('occasion_special')), findsOneWidget);
-      await _tap(tester, find.byKey(const Key('studio_step_0')));
+      await _tap(tester, find.byKey(const Key('studio_back')));
+      await _tap(tester, find.byKey(const Key('studio_back')));
       await _tap(tester, find.byKey(const Key('starting_piece_pants')));
       await _tap(tester, find.byKey(const Key('starting_color_Black')));
       expect(find.byType(OutfitCard), findsNothing);
-      expect(
-        tester
-            .widget<ChoiceChip>(find.byKey(const Key('studio_step_3')))
-            .onSelected,
-        isNull,
-      );
       await _tap(tester, find.byKey(const Key('studio_next')));
       expect(
         tester
             .widget<FilledButton>(find.byKey(const Key('studio_next')))
             .onPressed,
-        isNull,
-      );
-      expect(
-        tester
-            .widget<ChoiceChip>(find.byKey(const Key('studio_step_2')))
-            .onSelected,
-        isNull,
+        isNotNull,
       );
       for (var i = 0; i < 3; i++) {
         expect(
           tester
               .widget<ChoiceChip>(find.byKey(Key('matching_suggestion_$i')))
               .selected,
-          isFalse,
+          i == 0,
         );
       }
-      await _tap(tester, find.byKey(const Key('matching_suggestion_2')));
+      final expectedTop = const StyleEngine()
+          .matchingColors(
+            startingPiece: StartingPiece.pants,
+            color: ShirtColor.presets.firstWhere(
+              (color) => color.name == 'Black',
+            ),
+            profile: const StyleProfile(),
+          )
+          .first;
       await _tap(tester, find.byKey(const Key('studio_next')));
       await _tap(tester, find.byKey(const Key('occasion_special')));
       await _tap(tester, find.byKey(const Key('generate_outfits')));
@@ -203,6 +297,7 @@ void main() {
       )) {
         expect(card.outfit.startingPiece, StartingPiece.pants);
         expect(card.outfit.pants.colorArgb, 0xFF262626);
+        expect(card.outfit.shirt.argb, expectedTop.argb);
         expect(card.outfit.occasion, Occasion.special);
       }
       expect(tester.takeException(), isNull);
@@ -225,6 +320,7 @@ void main() {
         ],
       );
       await _mount(tester, store);
+      await _tap(tester, find.text('More'));
       await _tap(tester, find.text('Wardrobe'));
       await _tap(tester, find.text('Wear these pants'));
       expect(find.text('Choose your top color'), findsOneWidget);
@@ -232,10 +328,11 @@ void main() {
         find.textContaining('Keeping your deep custom teal pants'),
         findsOneWidget,
       );
-      await _tap(tester, find.byKey(const Key('matching_suggestion_0')));
       await _tap(tester, find.byKey(const Key('studio_next')));
       await _tap(tester, find.byKey(const Key('occasion_office')));
       await _tap(tester, find.byKey(const Key('generate_outfits')));
+      expect(find.byType(OutfitCard), findsOneWidget);
+      await _tap(tester, find.byKey(const Key('show_more_outfits')));
       expect(find.byType(OutfitCard), findsNWidgets(3));
       for (final card in tester.widgetList<OutfitCard>(
         find.byType(OutfitCard),

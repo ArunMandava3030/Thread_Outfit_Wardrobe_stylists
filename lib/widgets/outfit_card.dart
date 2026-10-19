@@ -58,6 +58,7 @@ class OutfitCard extends StatelessWidget {
           child: Stack(
             children: [
               OutfitArt(
+                height: 180,
                 shirt: Color(outfit.shirt.argb),
                 pants: Color(outfit.pants.colorArgb),
                 shoes: Color(outfit.shoes.colorArgb),
@@ -66,7 +67,7 @@ class OutfitCard extends StatelessWidget {
               Positioned(
                 top: 15,
                 left: 16,
-                right: 66,
+                right: 16,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -78,28 +79,11 @@ class OutfitCard extends StatelessWidget {
                   ),
                   child: Eyebrow(
                     index == 0
-                        ? 'Everyday favorite'
+                        ? 'Suggested for you'
                         : index == 1
                         ? 'A fresh perspective'
                         : 'Something different',
                     color: ThreadTheme.green,
-                  ),
-                ),
-              ),
-              Positioned(
-                right: 10,
-                top: 8,
-                child: IconButton.filledTonal(
-                  tooltip: saved ? 'Remove saved look' : 'Save look',
-                  onPressed: onSave,
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.white.withValues(alpha: .9),
-                  ),
-                  icon: Icon(
-                    saved
-                        ? Icons.bookmark_rounded
-                        : Icons.bookmark_border_rounded,
-                    size: 21,
                   ),
                 ),
               ),
@@ -167,78 +151,49 @@ class OutfitCard extends StatelessWidget {
               const Divider(),
               Wrap(
                 spacing: 8,
+                runSpacing: 8,
                 children: [
-                  TextButton.icon(
+                  FilledButton.icon(
                     onPressed: onSave,
-                    icon: Icon(saved ? Icons.favorite : Icons.favorite_border),
+                    icon: Icon(
+                      saved ? Icons.favorite : Icons.favorite_border,
+                      size: 19,
+                    ),
                     label: Text(saved ? 'Favorited' : 'Favorite outfit'),
                   ),
-                  if (onRate != null)
-                    TextButton.icon(
-                      onPressed: onRate,
-                      icon: const Icon(Icons.star_outline),
-                      label: const Text('Rate this outfit'),
+                  OutlinedButton(
+                    onPressed: () => showModalBottomSheet<void>(
+                      context: context,
+                      isScrollControlled: true,
+                      showDragHandle: true,
+                      backgroundColor: ThreadTheme.canvas,
+                      builder: (sheetContext) => _OutfitDetails(
+                        outfit: outfit,
+                        feedback: feedback,
+                        onRate: onRate == null
+                            ? null
+                            : () {
+                                Navigator.pop(sheetContext);
+                                onRate!();
+                              },
+                        onPlan: onPlan == null
+                            ? null
+                            : () {
+                                Navigator.pop(sheetContext);
+                                onPlan!();
+                              },
+                        onFeedback: onFeedback == null
+                            ? null
+                            : (vote) {
+                                Navigator.pop(sheetContext);
+                                onFeedback!(vote);
+                              },
+                      ),
                     ),
+                    child: const Text('Outfit details'),
+                  ),
                 ],
               ),
-              TextButton(
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 40),
-                ),
-                onPressed: () => showModalBottomSheet<void>(
-                  context: context,
-                  isScrollControlled: true,
-                  showDragHandle: true,
-                  backgroundColor: ThreadTheme.canvas,
-                  builder: (context) => _OutfitDetails(outfit: outfit),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(child: Text('Why it works')),
-                    Icon(Icons.arrow_outward_rounded, size: 17),
-                  ],
-                ),
-              ),
-              if (onFeedback != null || onPlan != null)
-                Wrap(
-                  spacing: 4,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    IconButton(
-                      tooltip: feedback == StyleFeedback.like
-                          ? 'Undo like'
-                          : 'Like this look',
-                      isSelected: feedback == StyleFeedback.like,
-                      selectedIcon: const Icon(Icons.thumb_up),
-                      icon: const Icon(Icons.thumb_up_outlined),
-                      onPressed: onFeedback == null
-                          ? null
-                          : () => onFeedback!(StyleFeedback.like),
-                    ),
-                    IconButton(
-                      tooltip: feedback == StyleFeedback.dislike
-                          ? 'Undo dislike'
-                          : 'Dislike this look',
-                      isSelected: feedback == StyleFeedback.dislike,
-                      selectedIcon: const Icon(Icons.thumb_down),
-                      icon: const Icon(Icons.thumb_down_outlined),
-                      onPressed: onFeedback == null
-                          ? null
-                          : () => onFeedback!(StyleFeedback.dislike),
-                    ),
-                    if (onPlan != null)
-                      TextButton.icon(
-                        onPressed: onPlan,
-                        icon: const Icon(
-                          Icons.event_available_outlined,
-                          size: 18,
-                        ),
-                        label: const Text('Plan look'),
-                      ),
-                  ],
-                ),
             ],
           ),
         ),
@@ -277,8 +232,18 @@ class _PieceLine extends StatelessWidget {
 }
 
 class _OutfitDetails extends StatelessWidget {
-  const _OutfitDetails({required this.outfit});
+  const _OutfitDetails({
+    required this.outfit,
+    this.onRate,
+    this.onPlan,
+    this.onFeedback,
+    this.feedback,
+  });
   final OutfitRecommendation outfit;
+  final VoidCallback? onRate;
+  final VoidCallback? onPlan;
+  final ValueChanged<StyleFeedback>? onFeedback;
+  final StyleFeedback? feedback;
   @override
   Widget build(BuildContext context) => SafeArea(
     child: ConstrainedBox(
@@ -300,6 +265,70 @@ class _OutfitDetails extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(outfit.description),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (onRate != null)
+                  FilledButton.icon(
+                    onPressed: onRate,
+                    icon: const Icon(Icons.star_outline, size: 18),
+                    label: const Text('Rate this outfit'),
+                  ),
+                if (onPlan != null)
+                  OutlinedButton.icon(
+                    onPressed: onPlan,
+                    icon: const Icon(Icons.event_available_outlined, size: 18),
+                    label: const Text('Plan look'),
+                  ),
+              ],
+            ),
+            if (onFeedback != null) ...[
+              const SizedBox(height: 16),
+              const Text(
+                'Would you wear this? Your feedback improves future suggestions.',
+              ),
+              Wrap(
+                spacing: 8,
+                children: [
+                  Tooltip(
+                    message: feedback == StyleFeedback.like
+                        ? 'Undo like'
+                        : 'Like this look',
+                    child: TextButton.icon(
+                      onPressed: () => onFeedback!(StyleFeedback.like),
+                      icon: Icon(
+                        feedback == StyleFeedback.like
+                            ? Icons.thumb_up
+                            : Icons.thumb_up_outlined,
+                      ),
+                      label: Text(
+                        feedback == StyleFeedback.like ? 'Liked' : 'Yes',
+                      ),
+                    ),
+                  ),
+                  Tooltip(
+                    message: feedback == StyleFeedback.dislike
+                        ? 'Undo dislike'
+                        : 'Dislike this look',
+                    child: TextButton.icon(
+                      onPressed: () => onFeedback!(StyleFeedback.dislike),
+                      icon: Icon(
+                        feedback == StyleFeedback.dislike
+                            ? Icons.thumb_down
+                            : Icons.thumb_down_outlined,
+                      ),
+                      label: Text(
+                        feedback == StyleFeedback.dislike
+                            ? 'Disliked'
+                            : 'Not for me',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             OutfitArt(
               shirt: Color(outfit.shirt.argb),
               pants: Color(outfit.pants.colorArgb),
