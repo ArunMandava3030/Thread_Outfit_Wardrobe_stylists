@@ -1,3 +1,5 @@
+import 'garment_visual_profile.dart';
+export 'garment_visual_profile.dart';
 import 'style_models.dart' show ShirtColor, StartingPiece;
 
 enum GarmentType {
@@ -53,24 +55,53 @@ class GarmentDetails {
     this.type,
     this.pattern = GarmentPattern.solid,
     this.accentColors = const [],
+    this.visualProfile,
   });
 
   final GarmentType? type;
   final GarmentPattern pattern;
   final List<ShirtColor> accentColors;
+  final GarmentVisualProfile? visualProfile;
+
+  GarmentVisualProfile? get measuredVisual =>
+      visualProfile?.isReliable == true ? visualProfile : null;
+
+  /// Continuous visual weight, not a semantic pattern classification.
+  double get visualIntensity {
+    final visual = measuredVisual;
+    if (visual == null) return 0;
+    return (visual.contrast * .35 +
+            visual.detailDensity * .45 +
+            visual.directionality * .10 +
+            visual.regularity * .10)
+        .clamp(0.0, 1.0);
+  }
+
+  bool get needsQuietCompanion => measuredVisual != null
+      ? visualIntensity >= .28 || measuredVisual!.palette.length > 1
+      : pattern != GarmentPattern.solid || accentColors.isNotEmpty;
+
+  bool get needsQuietLayer => measuredVisual != null
+      ? visualIntensity >= .52
+      : pattern != GarmentPattern.solid || accentColors.isNotEmpty;
 
   bool get isSpecified =>
       type != null ||
       pattern != GarmentPattern.solid ||
-      accentColors.isNotEmpty;
+      accentColors.isNotEmpty ||
+      visualProfile != null;
 
   GarmentDetails copyWith({
     Object? type = _unsetType,
     GarmentPattern? pattern,
     List<ShirtColor>? accentColors,
+    Object? visualProfile = _unsetType,
   }) => GarmentDetails(
     type: identical(type, _unsetType) ? this.type : type as GarmentType?,
     pattern: pattern ?? this.pattern,
+    visualProfile: identical(visualProfile, _unsetType)
+        ? this.visualProfile
+        : visualProfile as GarmentVisualProfile?,
     accentColors: accentColors == null
         ? this.accentColors
         : List.unmodifiable(accentColors),
@@ -81,11 +112,15 @@ class GarmentDetails {
     final accents = accentColors.map((color) => color.argb).toSet().toList()
       ..sort();
     return '${type?.name ?? 'unspecified'}-${pattern.name}-'
-        '${accents.map((argb) => argb.toRadixString(16)).join('.')}';
+        '${accents.map((argb) => argb.toRadixString(16)).join('.')}'
+        '${visualProfile == null ? '' : '-visual-${visualProfile!.signature}'}';
   }
 
   String summary(StartingPiece piece) {
     final garment = type?.label ?? piece.itemLabel;
+    if (measuredVisual != null) {
+      return '${measuredVisual!.shortDescription} ${garment.toLowerCase()}';
+    }
     final patternName = switch (pattern) {
       GarmentPattern.solid => accentColors.isEmpty ? 'Solid' : 'Multicolor',
       GarmentPattern.checks => 'Checked',
@@ -98,6 +133,7 @@ class GarmentDetails {
 
   Map<String, dynamic> toJson() => {
     'type': type?.name,
+    if (visualProfile != null) 'visualProfile': visualProfile!.toJson(),
     'pattern': pattern.name,
     'accentColors': accentColors.map((color) => color.toJson()).toList(),
   };
@@ -135,6 +171,9 @@ class GarmentDetails {
       type: type,
       pattern: pattern,
       accentColors: List.unmodifiable(accents),
+      visualProfile: raw['visualProfile'] == null
+          ? null
+          : GarmentVisualProfile.fromJson(raw['visualProfile']),
     );
   }
 }

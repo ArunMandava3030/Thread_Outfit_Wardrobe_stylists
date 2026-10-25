@@ -25,6 +25,7 @@ import 'services/style_store.dart';
 import 'theme.dart';
 import 'widgets/garment_art.dart';
 import 'widgets/garment_details_editor.dart';
+import 'widgets/garment_visual_summary.dart';
 import 'widgets/outfit_card.dart';
 import 'widgets/photo_analysis_sheet.dart';
 import 'widgets/weather_panel.dart';
@@ -188,6 +189,7 @@ class _StyleHomeState extends State<StyleHome> {
             bytes,
             sampleSkin: mode == 2,
             measureBody: mode == 3,
+            startInDesignMode: mode == 0 || mode == 1,
             garmentLabel: mode == 1 ? 'pants' : null,
           );
           if (result == null || !mounted) return;
@@ -201,7 +203,8 @@ class _StyleHomeState extends State<StyleHome> {
                   ? StartingPiece.pants
                   : StartingPiece.shirt;
               _garmentDetails = GarmentDetails(
-                accentColors: result.garmentPalette.skip(1).toList(),
+                accentColors: result.garmentPalette.skip(1).take(2).toList(),
+                visualProfile: result.visualProfile,
               );
               _matchingColor = null;
               _studioStep = 0;
@@ -265,7 +268,10 @@ class _StyleHomeState extends State<StyleHome> {
     _invalidate(() {
       _garmentDetails = piece != null && piece != _startingPiece
           ? const GarmentDetails()
-          : _garmentDetails.copyWith(accentColors: const []);
+          : _garmentDetails.copyWith(
+              accentColors: const [],
+              visualProfile: null,
+            );
       _shirt = color;
       _startingPiece = piece ?? _startingPiece;
       _matchingColor = null;
@@ -318,6 +324,7 @@ class _StyleHomeState extends State<StyleHome> {
     bool measureBody = false,
     String? garmentLabel,
     bool allowPalette = true,
+    bool startInDesignMode = false,
   }) => showModalBottomSheet<PhotoAnalysisResult>(
     context: context,
     isScrollControlled: true,
@@ -329,6 +336,7 @@ class _StyleHomeState extends State<StyleHome> {
       measureBody: measureBody,
       garmentLabel: garmentLabel,
       allowPalette: allowPalette,
+      startInDesignMode: startInDesignMode,
     ),
   );
 
@@ -398,6 +406,8 @@ class _StyleHomeState extends State<StyleHome> {
       final result = await _analyzeBytes(
         bytes,
         allowPalette: allowPalette,
+        startInDesignMode:
+            updateStudio && !sampleSkin && !measureBody && allowPalette,
         sampleSkin: sampleSkin,
         measureBody: measureBody,
         garmentLabel:
@@ -416,15 +426,17 @@ class _StyleHomeState extends State<StyleHome> {
         _invalidate(() {
           _shirt = result.shirtColor!;
           _garmentDetails = _garmentDetails.copyWith(
-            accentColors: result.garmentPalette.skip(1).toList(),
+            accentColors: result.garmentPalette.skip(1).take(2).toList(),
+            visualProfile: result.visualProfile,
+            pattern: GarmentPattern.solid,
           );
           _photo = bytes;
           _matchingColor = null;
           _studioStep = 0;
         });
-        if (result.garmentPalette.length > 1) {
+        if (result.visualProfile != null) {
           _message(
-            'Colors added. Use Type & pattern to confirm checks, stripes or prints.',
+            'Design read. Your matches now use its colors and visual detail.',
           );
         }
       }
@@ -1231,6 +1243,10 @@ class _StyleHomeState extends State<StyleHome> {
             'Keeping your ${_shirt.name.toLowerCase()} ${_startingPiece == StartingPiece.pants ? 'pants' : 'shirt'}. A suggested match is selected; change it if you like.',
           ),
           const SizedBox(height: 20),
+          if (_garmentDetails.visualProfile case final profile?) ...[
+            GarmentVisualSummary(profile: profile, compact: true),
+            const SizedBox(height: 16),
+          ],
           Wrap(
             spacing: 12,
             runSpacing: 12,
@@ -1239,7 +1255,20 @@ class _StyleHomeState extends State<StyleHome> {
                 ChoiceChip(
                   key: Key('matching_suggestion_$index'),
                   avatar: CircleAvatar(backgroundColor: Color(color.argb)),
-                  label: Text(color.name),
+                  label: switch (const StyleEngine().matchingColorHint(
+                    color: _shirt,
+                    matchingColor: color,
+                    details: _garmentDetails,
+                  )) {
+                    final String hint => Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(color.name),
+                        Text(hint, style: const TextStyle(fontSize: 10)),
+                      ],
+                    ),
+                    _ => Text(color.name),
+                  },
                   selected: _matchingColor?.argb == color.argb,
                   onSelected: (_) => _invalidate(() => _matchingColor = color),
                 ),
@@ -1532,7 +1561,7 @@ class _StyleHomeState extends State<StyleHome> {
                 onPressed: _picking ? null : () => _pickPhoto(),
                 icon: const Icon(Icons.add_a_photo_outlined, size: 18),
                 label: Text(
-                  _picking ? 'Opening photo…' : 'Use a photo',
+                  _picking ? 'Opening photo…' : 'Scan design',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),

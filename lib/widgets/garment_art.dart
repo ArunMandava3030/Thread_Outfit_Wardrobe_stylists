@@ -31,6 +31,31 @@ class _GarmentPainter extends CustomPainter {
   final GarmentDetails details;
 
   void _pattern(Canvas canvas, Path shape) {
+    final visual = details.visualProfile;
+    if (visual != null && visual.previewArgb.length == 256) {
+      // A low-resolution impression of the selected design, not an invented
+      // pattern label or an exact garment/fit simulation.
+      canvas.save();
+      canvas.clipPath(shape);
+      final bounds = shape.getBounds();
+      for (var row = 0; row < 16; row++) {
+        for (var column = 0; column < 16; column++) {
+          final argb = visual.previewArgb[row * 16 + column];
+          if ((argb >> 24) == 0) continue;
+          canvas.drawRect(
+            Rect.fromLTWH(
+              bounds.left + column * bounds.width / 16,
+              bounds.top + row * bounds.height / 16,
+              bounds.width / 16 + .1,
+              bounds.height / 16 + .1,
+            ),
+            Paint()..color = Color(argb),
+          );
+        }
+      }
+      canvas.restore();
+      return;
+    }
     if (details.pattern == GarmentPattern.solid) return;
     final accents = details.accentColors.map((c) => Color(c.argb)).toList();
     final contrast = color.computeLuminance() > .4
@@ -280,6 +305,10 @@ class _GarmentPainter extends CustomPainter {
       oldDelegate.kind != kind ||
       oldDelegate.color != color ||
       oldDelegate.details.signature != details.signature ||
+      !listEquals(
+        oldDelegate.details.visualProfile?.previewArgb,
+        details.visualProfile?.previewArgb,
+      ) ||
       !listEquals(
         oldDelegate.details.accentColors.map((c) => c.argb).toList(),
         details.accentColors.map((c) => c.argb).toList(),

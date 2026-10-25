@@ -161,10 +161,12 @@ class OutfitRatingInput {
       layer.name,
       if (hasLayer) layerColor.argb.toRadixString(16),
       if (topDetails.pattern != GarmentPattern.solid ||
-          topDetails.accentColors.isNotEmpty)
+          topDetails.accentColors.isNotEmpty ||
+          topDetails.visualProfile != null)
         topDetails.copyWith(type: top.garmentType).signature,
       if (pantsDetails.pattern != GarmentPattern.solid ||
-          pantsDetails.accentColors.isNotEmpty)
+          pantsDetails.accentColors.isNotEmpty ||
+          pantsDetails.visualProfile != null)
         pantsDetails.copyWith(type: bottom.garmentType).signature,
     ].join('-');
     return OutfitRecommendation(

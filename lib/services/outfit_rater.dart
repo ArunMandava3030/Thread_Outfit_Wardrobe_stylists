@@ -216,7 +216,49 @@ class OutfitRater {
     final patternedPants =
         input.pantsDetails.pattern != GarmentPattern.solid ||
         input.pantsDetails.accentColors.isNotEmpty;
-    if (patternedTop && patternedPants) {
+    final measured =
+        input.topDetails.measuredVisual != null ||
+        input.pantsDetails.measuredVisual != null;
+    if (measured) {
+      double weight(GarmentDetails details, bool patterned) =>
+          details.measuredVisual != null
+          ? details.visualIntensity
+          : patterned
+          ? .5
+          : 0;
+      final topWeight = weight(input.topDetails, patternedTop);
+      final bottomWeight = weight(input.pantsDetails, patternedPants);
+      final balanceAdjustment = .8 * topWeight * bottomWeight;
+      score -= balanceAdjustment;
+      if (topWeight > .15 && bottomWeight > .15) {
+        suggestions.add(
+          'Both pieces carry visible detail. The balance adjustment scales with measured contrast, detail density, directionality and regularity; try a quieter companion if you want the more detailed garment to lead. Mixing detail remains a style choice.',
+        );
+      }
+      final dominantDetails = topWeight >= bottomWeight
+          ? input.topDetails
+          : input.pantsDetails;
+      final otherColor = topWeight >= bottomWeight
+          ? input.pantsColor
+          : input.topColor;
+      final otherWeight = math.min(topWeight, bottomWeight);
+      final visual = dominantDetails.measuredVisual;
+      if (visual != null && otherWeight < .35) {
+        var echoedShare = 0.0;
+        for (final entry in visual.palette) {
+          if (_similarColor(entry.color.argb, otherColor.argb)) {
+            echoedShare += entry.share;
+          }
+        }
+        score += .15 * math.sqrt(echoedShare.clamp(0.0, 1.0));
+        suggestions.add(
+          echoedShare > 0
+              ? 'The quieter piece repeats a color covering about ${(echoedShare * 100).round()}% of the sampled garment area. This links the palette without needing to name the pattern.'
+              : 'A quiet neutral or one of the larger colors in the sampled palette can balance this garment. The scan describes visible detail, not a named pattern.',
+        );
+        suggestions.add(visual.stylingDescription);
+      }
+    } else if (patternedTop && patternedPants) {
       score -= .35;
       suggestions.add(
         'Both the top and pants have patterns or multiple colors. For an easier pairing, make one piece solid; if you enjoy mixing patterns, vary their scale and repeat a shared color.',
@@ -244,11 +286,15 @@ class OutfitRater {
       }
     }
     return RatingComponent(
-      patternedTop || patternedPants
+      measured
+          ? 'Color and visual balance'
+          : patternedTop || patternedPants
           ? 'Color and pattern coordination'
           : 'Color coordination',
       score.clamp(0.0, 5.0),
-      patternedTop || patternedPants
+      measured
+          ? 'Visual balance uses the sampled palette shares and continuous detail measurements. Two visually detailed pieces have a proportional balance adjustment of up to 0.8 here; a palette echo with a quieter piece adds up to 0.15. This is a styling heuristic, not pattern recognition.'
+          : patternedTop || patternedPants
           ? 'Palette balance uses the main colors and confirmed accents. A shared accent with a solid piece adds 0.15 here; two patterned or multicolor pieces subtract 0.35 for visual complexity. Pattern mixing can be intentional.'
           : 'Palette balance is estimated from the selected garment colors, with room for intentional bold combinations.',
     );

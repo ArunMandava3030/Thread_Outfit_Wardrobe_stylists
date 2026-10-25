@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -5,27 +7,33 @@ import 'models/style_discovery_models.dart';
 import 'models/style_models.dart';
 import 'services/style_direction_stylist.dart';
 import 'services/style_engine.dart';
+import 'services/guest_photo_picker.dart';
+import 'services/photo_analyzer.dart';
 import 'theme.dart';
 import 'widgets/garment_art.dart';
 import 'widgets/garment_details_editor.dart';
+import 'widgets/garment_visual_summary.dart';
+import 'widgets/photo_analysis_sheet.dart';
 import 'widgets/trend_panel.dart';
 
-/// A session-only public preview. Its entrypoint never opens a profile store or
-/// photo analyzer, so basic styling works with browser storage unavailable.
+/// A session-only preview. Optional design scans process a selected photo in
+/// memory; no profile store or body-analysis model is opened.
 class ThreadGuestApp extends StatelessWidget {
-  const ThreadGuestApp({super.key});
+  const ThreadGuestApp({super.key, this.photoPicker});
+  final Future<Uint8List?> Function()? photoPicker;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'Try Thread · Find your next outfit',
     debugShowCheckedModeBanner: false,
     theme: ThreadTheme.theme,
-    home: const _GuestStudio(),
+    home: _GuestStudio(photoPicker: photoPicker),
   );
 }
 
 class _GuestStudio extends StatefulWidget {
-  const _GuestStudio();
+  const _GuestStudio({this.photoPicker});
+  final Future<Uint8List?> Function()? photoPicker;
 
   @override
   State<_GuestStudio> createState() => _GuestStudioState();
@@ -47,6 +55,8 @@ class _GuestStudioState extends State<_GuestStudio> {
   List<OutfitRecommendation> _outfits = const [];
   bool _heightProvided = false;
   bool _showMoreOutfits = false;
+  int _photoRequest = 0;
+  bool _scanning = false;
 
   @override
   void dispose() {
@@ -63,9 +73,58 @@ class _GuestStudioState extends State<_GuestStudio> {
   });
 
   void _changeStartingItem(VoidCallback update) => _change(() {
+    _photoRequest++;
     update();
     _matchingColor = null;
   });
+
+  Future<void> _scanDesign() async {
+    final request = ++_photoRequest;
+    try {
+      final bytes = await (widget.photoPicker ?? pickGuestPhoto)();
+      if (!mounted || bytes == null || request != _photoRequest) return;
+      setState(() => _scanning = true);
+      final result = await showModalBottomSheet<PhotoAnalysisResult>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: ThreadTheme.canvas,
+        builder: (_) => PhotoAnalysisSheet(
+          bytes: bytes,
+          garmentLabel: _startingPiece.itemLabel.toLowerCase(),
+          startInDesignMode: true,
+        ),
+      );
+      if (!mounted || result?.shirtColor == null || request != _photoRequest) {
+        return;
+      }
+      _change(() {
+        _color = result!.shirtColor!;
+        _details = _details.copyWith(
+          pattern: GarmentPattern.solid,
+          accentColors: result.garmentPalette.skip(1).take(2).toList(),
+          visualProfile: result.visualProfile,
+        );
+        _matchingColor = null;
+      });
+    } catch (error) {
+      if (mounted && request == _photoRequest) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is FormatException
+                  ? error.message
+                  : 'This photo could not be opened. Try another.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted && request == _photoRequest) {
+        setState(() => _scanning = false);
+      }
+    }
+  }
 
   void _goTo(int step) {
     setState(() {
@@ -386,44 +445,78 @@ class _GuestStudioState extends State<_GuestStudio> {
           ],
         ),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            GarmentArt(
-              kind: _startingPiece == StartingPiece.shirt
-                  ? GarmentKind.shirt
-                  : GarmentKind.pants,
-              color: Color(_color.argb),
-              details: _details,
-              size: 90,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${_color.name} ${_startingPiece.itemLabel.toLowerCase()}',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  TextButton.icon(
-                    key: const Key('guest_garment_details'),
-                    onPressed: _editDetails,
-                    icon: const Icon(Icons.tune, size: 18),
-                    label: Text(
-                      _details.isSpecified
-                          ? _details.summary(_startingPiece)
-                          : 'Type & pattern',
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final stackActions =
+                constraints.maxWidth < 300 ||
+                MediaQuery.textScalerOf(context).scale(14) > 14 * 1.3;
+            final actions = Row(
+              children: [
+                Expanded(
+                  child: TextButton.icon(
+                    key: const Key('guest_scan_design'),
+                    onPressed: _scanning ? null : _scanDesign,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                    ),
+                    icon: const Icon(Icons.document_scanner_outlined, size: 18),
+                    label: const Text(
+                      'Scan design',
+                      textAlign: TextAlign.center,
                     ),
                   ),
-                  if (_details.accentColors.isNotEmpty)
-                    Text(
-                      'Also ${_details.accentColors.map((color) => color.name).join(', ')}',
-                      style: Theme.of(context).textTheme.bodySmall,
+                ),
+                IconButton(
+                  key: const Key('guest_garment_details'),
+                  tooltip: 'Type & pattern',
+                  onPressed: _editDetails,
+                  icon: const Icon(Icons.tune, size: 18),
+                ),
+              ],
+            );
+            return Column(
+              children: [
+                Row(
+                  children: [
+                    GarmentArt(
+                      kind: _startingPiece == StartingPiece.shirt
+                          ? GarmentKind.shirt
+                          : GarmentKind.pants,
+                      color: Color(_color.argb),
+                      details: _details,
+                      size: 90,
                     ),
-                ],
-              ),
-            ),
-          ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${_color.name} ${_startingPiece.itemLabel.toLowerCase()}',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          if (_details.isSpecified)
+                            Text(
+                              _details.summary(_startingPiece),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          if (!stackActions) actions,
+                          if (_details.accentColors.isNotEmpty)
+                            Text(
+                              'Also ${_details.accentColors.map((color) => color.name).join(', ')}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (stackActions) actions,
+              ],
+            );
+          },
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -443,7 +536,10 @@ class _GuestStudioState extends State<_GuestStudio> {
                       if (_color.argb != color.argb) {
                         _changeStartingItem(() {
                           _color = color;
-                          _details = _details.copyWith(accentColors: const []);
+                          _details = _details.copyWith(
+                            accentColors: const [],
+                            visualProfile: null,
+                          );
                         });
                       }
                     },
@@ -514,6 +610,10 @@ class _GuestStudioState extends State<_GuestStudio> {
           const SizedBox(height: 8),
           const Text('We’ve picked a match. Keep it or try another.'),
           const SizedBox(height: 20),
+          if (_details.visualProfile case final profile?) ...[
+            GarmentVisualSummary(profile: profile, compact: true),
+            const SizedBox(height: 16),
+          ],
           Wrap(
             alignment: WrapAlignment.center,
             spacing: 16,
@@ -545,9 +645,26 @@ class _GuestStudioState extends State<_GuestStudio> {
             children: [
               for (final color in suggestions.take(3))
                 ChoiceChip(
-                  key: Key('guest_match_${color.name}'),
+                  key: Key(
+                    _details.measuredVisual == null
+                        ? 'guest_match_${color.name}'
+                        : 'guest_match_${color.argb}',
+                  ),
                   avatar: CircleAvatar(backgroundColor: Color(color.argb)),
-                  label: Text(color.name),
+                  label: switch (const StyleEngine().matchingColorHint(
+                    color: _color,
+                    matchingColor: color,
+                    details: _details,
+                  )) {
+                    final String hint => Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(color.name),
+                        Text(hint, style: const TextStyle(fontSize: 10)),
+                      ],
+                    ),
+                    _ => Text(color.name),
+                  },
                   selected: _matchingColor?.argb == color.argb,
                   showCheckmark: false,
                   onSelected: (_) => _change(() => _matchingColor = color),

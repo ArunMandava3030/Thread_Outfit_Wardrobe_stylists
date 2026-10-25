@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/style_models.dart';
+import 'garment_visual_summary.dart';
 
 /// A small optional editor. Nothing changes until the user presses Done.
 Future<GarmentDetails?> showGarmentDetailsEditor(
@@ -121,6 +122,26 @@ class GarmentPatternFields extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accents = _uniqueAccents(details.accentColors, mainColor);
+    final visual = details.visualProfile;
+    if (visual != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GarmentVisualSummary(profile: visual, compact: true),
+          const SizedBox(height: 8),
+          ExpansionTile(
+            key: const Key('garment_describe_manually'),
+            tilePadding: EdgeInsets.zero,
+            title: const Text('Describe it myself'),
+            children: [_manualFields(context, accents)],
+          ),
+        ],
+      );
+    }
+    return _manualFields(context, accents);
+  }
+
+  Widget _manualFields(BuildContext context, List<ShirtColor> accents) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -139,6 +160,7 @@ class GarmentPatternFields extends StatelessWidget {
                 onSelected: (_) => onChanged(
                   details.copyWith(
                     pattern: pattern,
+                    visualProfile: null,
                     accentColors: pattern == GarmentPattern.solid
                         ? const []
                         : accents,
@@ -188,6 +210,7 @@ class GarmentPatternFields extends StatelessWidget {
                         ? null
                         : (selected) => onChanged(
                             details.copyWith(
+                              visualProfile: null,
                               accentColors: selected
                                   ? [...accents, color]
                                   : accents

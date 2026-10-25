@@ -72,7 +72,7 @@ void main() {
       expect(find.text('Checked pants'), findsOneWidget);
       expect(find.text('Also White'), findsNothing);
       await _tap(tester, find.byKey(const Key('guest_start_shirt')));
-      expect(find.text('Type & pattern'), findsOneWidget);
+      expect(find.byTooltip('Type & pattern'), findsOneWidget);
       expect(find.text('Checked pants'), findsNothing);
       expect(tester.takeException(), isNull);
     },

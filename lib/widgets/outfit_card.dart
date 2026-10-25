@@ -4,6 +4,7 @@ import '../models/style_models.dart';
 import '../models/learning_models.dart';
 import '../theme.dart';
 import 'garment_art.dart';
+import 'garment_visual_summary.dart';
 
 IconData occasionIcon(Occasion occasion) => switch (occasion) {
   Occasion.office => Icons.work_outline_rounded,
@@ -351,6 +352,14 @@ class _OutfitDetails extends StatelessWidget {
               'Why these pieces work',
               style: Theme.of(context).textTheme.titleMedium,
             ),
+            if (outfit.topDetails.visualProfile case final visual?) ...[
+              const SizedBox(height: 12),
+              GarmentVisualSummary(profile: visual),
+            ],
+            if (outfit.pantsDetails.visualProfile case final visual?) ...[
+              const SizedBox(height: 12),
+              GarmentVisualSummary(profile: visual),
+            ],
             const SizedBox(height: 12),
             for (final reason in outfit.reasons)
               Padding(

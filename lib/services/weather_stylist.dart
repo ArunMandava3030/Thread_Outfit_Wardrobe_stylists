@@ -181,10 +181,8 @@ class WeatherStylist {
           );
         }
         final quietLayer =
-            outfit.topDetails.pattern != GarmentPattern.solid ||
-            outfit.pantsDetails.pattern != GarmentPattern.solid ||
-            outfit.topDetails.accentColors.isNotEmpty ||
-            outfit.pantsDetails.accentColors.isNotEmpty;
+            outfit.topDetails.needsQuietLayer ||
+            outfit.pantsDetails.needsQuietLayer;
         if (quietLayer &&
             layer.colorArgb != 0 &&
             !layer.title.toLowerCase().startsWith('plain ')) {

@@ -1,7 +1,7 @@
 name: thread_style
 description: A personal outfit companion that starts with the shirt or pants you are wearing.
 publish_to: none
-version: 1.4.0+5
+version: 1.5.0+6
 
 environment:
   sdk: '>=3.8.0 <4.0.0'
@@ -17,6 +17,7 @@ dependencies:
   url_launcher: ^6.3.2
   tflite_flutter: ^0.12.1
   material_color_utilities: 0.11.1
+  web: 1.1.1
 
 dev_dependencies:
   flutter_test:

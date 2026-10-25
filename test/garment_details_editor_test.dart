@@ -5,6 +5,20 @@ import 'package:thread_style/theme.dart';
 import 'package:thread_style/widgets/garment_details_editor.dart';
 
 const _red = ShirtColor(name: 'Red', argb: 0xFFC94F4F);
+const _visual = GarmentVisualProfile(
+  contrast: .65,
+  detailDensity: .6,
+  sampleWidth: 64,
+  sampleHeight: 64,
+  opaqueCoverage: 1,
+  palette: [
+    VisualColorShare(color: _red, share: .7),
+    VisualColorShare(
+      color: ShirtColor(name: 'White', argb: 0xFFF4F2EB),
+      share: .3,
+    ),
+  ],
+);
 
 Future<void> _tap(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);
@@ -43,6 +57,55 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets(
+    'photo design remains dynamic and type-only editing preserves it',
+    (tester) async {
+      GarmentDetails? result;
+      await _pump(
+        tester,
+        initial: const GarmentDetails(visualProfile: _visual),
+        onResult: (value) => result = value,
+      );
+      expect(find.text('Photo estimate'), findsOneWidget);
+      expect(find.text('Red 70%'), findsOneWidget);
+      expect(find.byKey(const Key('garment_pattern_checks')), findsNothing);
+      await _tap(tester, find.byType(DropdownButtonFormField<GarmentType>));
+      await _tap(tester, find.text('T-shirt').last);
+      await _tap(tester, find.byKey(const Key('garment_details_done')));
+      expect(result?.type, GarmentType.tShirt);
+      expect(result?.visualProfile?.signature, _visual.signature);
+      expect(result?.pattern, GarmentPattern.solid);
+    },
+  );
+
+  testWidgets('manual pattern replaces photo design only when confirmed', (
+    tester,
+  ) async {
+    GarmentDetails? result;
+    for (final confirm in [false, true]) {
+      await _pump(
+        tester,
+        initial: const GarmentDetails(visualProfile: _visual),
+        onResult: (value) => result = value,
+      );
+      await _tap(tester, find.text('Describe it myself'));
+      await _tap(tester, find.byKey(const Key('garment_pattern_checks')));
+      await _tap(
+        tester,
+        find.byKey(
+          Key(confirm ? 'garment_details_done' : 'garment_details_cancel'),
+        ),
+      );
+      if (confirm) {
+        expect(result?.visualProfile, isNull);
+        expect(result?.pattern, GarmentPattern.checks);
+      } else {
+        expect(result, isNull);
+      }
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'sampled and preset colors sharing a name have distinct controls',
     (tester) async {

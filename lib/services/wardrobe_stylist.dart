@@ -69,7 +69,37 @@ class WardrobeStylist {
     }
     // A plain recommendation must not count a known checked/printed garment as
     // its match, even if the stored dominant color is identical.
-    if (expected.pattern != owned.pattern) return false;
+    final expectedVisual = expected.measuredVisual;
+    final ownedVisual = owned.measuredVisual;
+    if (expectedVisual != null && ownedVisual != null) {
+      final distance =
+          (expectedVisual.contrast - ownedVisual.contrast).abs() * .35 +
+          (expectedVisual.detailDensity - ownedVisual.detailDensity).abs() *
+              .35 +
+          (expectedVisual.directionality - ownedVisual.directionality).abs() *
+              .15 +
+          (expectedVisual.regularity - ownedVisual.regularity).abs() * .15;
+      if (distance > .24) return false;
+      for (final expectedShare in expectedVisual.palette.where(
+        (share) => share.share >= .10,
+      )) {
+        if (!ownedVisual.palette.any(
+          (ownedShare) =>
+              (expectedShare.share - ownedShare.share).abs() <= .22 &&
+              _colorDistance(expectedShare.color.argb, ownedShare.color.argb) <
+                  16,
+        )) {
+          return false;
+        }
+      }
+    } else if (expectedVisual == null && ownedVisual != null) {
+      if (expected.pattern == GarmentPattern.solid &&
+          owned.visualIntensity >= .28) {
+        return false;
+      }
+    } else if (expected.pattern != owned.pattern) {
+      return false;
+    }
     if (expected.accentColors.isEmpty || owned.accentColors.isEmpty) {
       return true;
     }
@@ -131,4 +161,13 @@ class WardrobeStylist {
       : (24389 / 27 * value + 16) / 116;
   final fx = transform(x), fy = transform(y), fz = transform(z);
   return (116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz));
+}
+
+double _colorDistance(int left, int right) {
+  final a = _lab(left), b = _lab(right);
+  return math.sqrt(
+    math.pow(a.$1 - b.$1, 2) +
+        math.pow(a.$2 - b.$2, 2) +
+        math.pow(a.$3 - b.$3, 2),
+  );
 }

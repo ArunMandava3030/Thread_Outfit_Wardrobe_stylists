@@ -19,7 +19,9 @@ class StyleEngine {
               ShirtColor(name: palette.pants.name, argb: palette.pants.argb),
         )
         .toList();
-    if (details.pattern != GarmentPattern.solid ||
+    if (details.measuredVisual != null) {
+      matches = _visualMatches(color, details);
+    } else if (details.pattern != GarmentPattern.solid ||
         details.accentColors.isNotEmpty) {
       matches = _patternMatches(color, details, matches);
     }
@@ -40,6 +42,23 @@ class StyleEngine {
       return List.unmodifiable(indexed.map((entry) => entry.$2));
     }
     return List.unmodifiable(matches);
+  }
+
+  /// Explain a displayed suggestion by its actual color, so opt-in profile
+  /// reordering does not attach the wrong strategy to a chip.
+  String? matchingColorHint({
+    required ShirtColor color,
+    required ShirtColor matchingColor,
+    required GarmentDetails details,
+  }) {
+    final visual = details.measuredVisual;
+    if (visual == null) return null;
+    final choices = _visualChoices(color, visual);
+    if (matchingColor.argb == choices.$1.argb) return 'Quiet neutral';
+    if (matchingColor.argb == choices.$2.argb) return 'Color echo';
+    if (matchingColor.argb == choices.$3.argb) return 'Accent pick';
+    if (_Rgb(matchingColor.argb).saturation < .3) return 'Quiet neutral';
+    return null;
   }
 
   /// Build around the item already being worn. Explicit top and trouser colors
@@ -78,9 +97,8 @@ class StyleEngine {
           includeLayer: includeLayer,
         )[index];
         final anchoredPants = startingPiece == StartingPiece.pants;
-        final hasPattern =
-            anchor.pattern != GarmentPattern.solid ||
-            anchor.accentColors.isNotEmpty;
+        final visual = anchor.measuredVisual;
+        final hasPattern = anchor.needsQuietCompanion;
         final companionTitle = anchor.isSpecified
             ? _companionTitle(
                 anchor.type,
@@ -93,7 +111,9 @@ class StyleEngine {
         final plainCompanion = hasPattern && occasion != Occasion.bikeRide
             ? _plainTitle(companionTitle)
             : companionTitle;
-        final ownedTitle = anchor.isSpecified
+        final ownedTitle = visual != null
+            ? '${(anchor.type?.label ?? startingPiece.itemLabel).toLowerCase()} · scanned design'
+            : anchor.isSpecified
             ? 'Your ${anchor.summary(startingPiece).toLowerCase()}'
             : anchoredPants
             ? 'Your pants'
@@ -110,8 +130,8 @@ class StyleEngine {
                 type: _typeFromTitle(companionTitle, isTop: anchoredPants),
               )
             : const GarmentDetails();
-        final layer =
-            hasPattern &&
+        var layer =
+            anchor.needsQuietLayer &&
                 base.layer.colorArgb != 0 &&
                 occasion != Occasion.bikeRide
             ? OutfitPiece(
@@ -121,12 +141,72 @@ class StyleEngine {
                 colorArgb: base.layer.colorArgb,
               )
             : base.layer;
+        var shoes = base.shoes;
+        if (visual != null && occasion != Occasion.bikeRide) {
+          final choices = _visualChoices(color, visual);
+          if (layer.colorArgb != 0) {
+            final layerColor = index == 1 && !anchor.needsQuietLayer
+                ? choices.$2
+                : choices.$1;
+            final polished =
+                occasion == Occasion.office || occasion == Occasion.special;
+            final layerTitle = anchor.needsQuietLayer
+                ? _plainTitle(base.layer.title)
+                : visual.directionality >= .6
+                ? (polished
+                      ? 'Smooth unstructured blazer'
+                      : 'Smooth cotton overshirt')
+                : visual.regularity >= .55
+                ? 'Fine-knit cardigan'
+                : (polished
+                      ? 'Softly textured unstructured blazer'
+                      : 'Softly textured overshirt');
+            layer = OutfitPiece(
+              category: 'Layer',
+              title: layerTitle,
+              colorName: layerColor.name,
+              colorArgb: layerColor.argb,
+            );
+          }
+          // Supporting and smaller palette colors remain real alternatives
+          // through footwear even when the user locks the companion color.
+          // Formal/office footwear retains its occasion-appropriate neutrals.
+          if (index > 0 &&
+              occasion != Occasion.office &&
+              occasion != Occasion.special) {
+            final finishingColor = index == 1 ? choices.$2 : choices.$3;
+            shoes = OutfitPiece(
+              category: 'Shoes',
+              title: shoes.title,
+              colorName: finishingColor.name,
+              colorArgb: finishingColor.argb,
+            );
+          }
+        }
         final reasons = <String>[
           anchoredPants
               ? '${top.name} on top pairs with the ${bottom.name.toLowerCase()} pants you are keeping.'
               : '${bottom.name} pants pair with the ${top.name.toLowerCase()} top you are keeping.',
-          ...base.reasons.skip(1),
-          if (hasPattern)
+          ...base.reasons
+              .skip(1)
+              .where(
+                (reason) =>
+                    visual == null ||
+                    !(reason.startsWith('A ') &&
+                        reason.contains('layer connects the palette')),
+              ),
+          if (visual != null) ...[
+            visual.stylingDescription,
+            anchor.needsQuietLayer
+                ? 'The sampled area has stronger contrast and denser detail, so plain companions and a quiet neutral layer leave the garment in focus.'
+                : 'The sampled detail is quieter, so a soft texture or smooth directional layer can add interest without competing with it.',
+            index == 0
+                ? 'This option uses a quiet neutral beside the measured palette.'
+                : index == 1
+                ? 'This option echoes a larger supporting color from the sampled area where the selected colors allow it.'
+                : 'This option picks up a smaller sampled color in the finishing pieces when the occasion allows it.',
+          ],
+          if (hasPattern && visual == null)
             'Let your ${anchor.pattern == GarmentPattern.solid ? 'multi-color palette' : anchor.pattern.label.toLowerCase()} lead: keep the other garment and optional layer plain. Echo one color from the garment or choose a quiet neutral.',
           if (anchor.accentColors.isNotEmpty)
             'Your palette keeps ${color.name} with ${anchor.accentColors.map((accent) => accent.name).join(', ')}; the companion does not need to contrast with every color.',
@@ -154,7 +234,7 @@ class StyleEngine {
           topDetails: anchoredPants ? companionDetails : anchor,
           pantsDetails: anchoredPants ? anchor : companionDetails,
           pants: pants,
-          shoes: base.shoes,
+          shoes: shoes,
           layer: layer,
           reasons: List.unmodifiable(reasons),
           fitAdvice: base.fitAdvice,
@@ -162,6 +242,50 @@ class StyleEngine {
         );
       }),
     );
+  }
+
+  (ShirtColor, ShirtColor, ShirtColor) _visualChoices(
+    ShirtColor main,
+    GarmentVisualProfile visual,
+  ) {
+    final shares = visual.palette.toList()
+      ..sort((a, b) => b.share.compareTo(a.share));
+    final supporting = shares
+        .where((entry) => entry.color.argb != main.argb)
+        .toList();
+    final averageLight = shares.fold<double>(
+      0,
+      (value, entry) => value + _Rgb(entry.color.argb).lightness * entry.share,
+    );
+    final fallbackNeutral = averageLight >= .52 ? _navy : _ecru;
+    final quiet = shares
+        .where((entry) => _Rgb(entry.color.argb).saturation < .20)
+        .toList();
+    final neutral = quiet.isNotEmpty
+        ? quiet.first.color
+        : ShirtColor(name: fallbackNeutral.name, argb: fallbackNeutral.argb);
+    final support = supporting.isNotEmpty ? supporting.first.color : neutral;
+    final small =
+        supporting
+            .where((entry) => entry.share >= .03 && entry.share <= .22)
+            .toList()
+          ..sort((a, b) => a.share.compareTo(b.share));
+    final accent = small.isNotEmpty ? small.first.color : support;
+    return (neutral, support, accent);
+  }
+
+  List<ShirtColor> _visualMatches(ShirtColor main, GarmentDetails details) {
+    final choices = _visualChoices(main, details.measuredVisual!);
+    final candidates = details.visualIntensity >= .52
+        ? [choices.$1, choices.$2, choices.$3]
+        : [choices.$2, choices.$1, choices.$3];
+    final seen = <int>{};
+    return [
+      ...candidates,
+      const ShirtColor(name: 'Stone', argb: 0xFFC7C2B6),
+      const ShirtColor(name: 'Navy', argb: 0xFF293B50),
+      const ShirtColor(name: 'Ecru', argb: 0xFFECE5D4),
+    ].where((color) => seen.add(color.argb)).take(3).toList();
   }
 
   List<ShirtColor> _patternMatches(

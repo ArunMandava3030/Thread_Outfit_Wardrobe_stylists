@@ -10,6 +10,7 @@ class PhotoAnalysisResult {
     this.skinToneArgb,
     this.bodyShape,
     this.garmentPalette = const [],
+    this.visualProfile,
   });
 
   final ShirtColor? shirtColor;
@@ -17,8 +18,11 @@ class PhotoAnalysisResult {
   final BodyShape? bodyShape;
 
   /// Only populated after the user deliberately selects a garment region.
-  /// The confirmed main colour comes first; no fabric/pattern is inferred.
+  /// The confirmed main colour comes first; no fabric category is inferred.
   final List<ShirtColor> garmentPalette;
+
+  /// Measured palette and texture cues from the same selected region.
+  final GarmentVisualProfile? visualProfile;
 }
 
 /// Local image helpers. These do not detect a person or infer measurements.

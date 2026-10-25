@@ -443,7 +443,10 @@ class _WardrobeItemDialogState extends State<_WardrobeItemDialog> {
                 hintText: '#9BAE98',
               ),
               onChanged: (_) => setState(() {
-                _details = _details.copyWith(accentColors: const []);
+                _details = _details.copyWith(
+                  accentColors: const [],
+                  visualProfile: null,
+                );
               }),
               validator: (value) => _parseColor(value ?? '') == null
                   ? 'Use 6 hex digits, like #9BAE98.'

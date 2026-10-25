@@ -579,7 +579,12 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
                 key: ValueKey('rating-summary-$label'),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
-              if (details != null &&
+              if (details?.measuredVisual case final visual?)
+                Text(
+                  visual.shortDescription,
+                  style: Theme.of(context).textTheme.bodySmall,
+                )
+              else if (details != null &&
                   (details.pattern != GarmentPattern.solid ||
                       details.accentColors.isNotEmpty))
                 Text(
@@ -685,6 +690,7 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
                                       if (draftColor.argb != preset.argb) {
                                         draftDetails = draftDetails.copyWith(
                                           accentColors: const [],
+                                          visualProfile: null,
                                         );
                                       }
                                       draftColor = preset;
@@ -710,6 +716,7 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
                                               draftDetails = draftDetails
                                                   .copyWith(
                                                     accentColors: const [],
+                                                    visualProfile: null,
                                                   );
                                             }
                                             draftColor = sampled;

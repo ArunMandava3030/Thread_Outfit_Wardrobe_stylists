@@ -67,6 +67,57 @@ Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
+  testWidgets(
+    'rating preserves scanned design for type edits and clears it for a new color',
+    (tester) async {
+      final visual = GarmentVisualProfile(
+        contrast: .6,
+        detailDensity: .65,
+        sampleWidth: 64,
+        sampleHeight: 64,
+        opaqueCoverage: 1,
+        palette: [
+          VisualColorShare(color: ShirtColor.presets[12], share: .7),
+          VisualColorShare(color: ShirtColor.presets[3], share: .3),
+        ],
+      );
+      final initial = OutfitRatingInput(
+        topColor: ShirtColor.presets[12],
+        pantsColor: ShirtColor.presets[2],
+        shoesColor: ShirtColor.presets[3],
+        layerColor: ShirtColor.presets[4],
+        topDetails: GarmentDetails(visualProfile: visual),
+      ).toOutfit();
+      OutfitRecommendation? saved;
+      await _pump(
+        tester,
+        initialOutfit: initial,
+        onFavorite: (value) async => saved = value,
+      );
+      expect(find.text(visual.shortDescription), findsOneWidget);
+      await _tapVisible(tester, find.byKey(const Key('rating-edit-Top')));
+      await _tapVisible(
+        tester,
+        find.byKey(const ValueKey('rating-Top type-shirt')),
+      );
+      await _tapVisible(tester, find.text('T-shirt').last);
+      await _tapVisible(tester, find.byKey(const Key('rating-editor-done')));
+      await _tapVisible(tester, find.byKey(const Key('rate_current_outfit')));
+      await _tapVisible(tester, find.byKey(const Key('favorite_rated_outfit')));
+      expect(saved?.topDetails.visualProfile?.signature, visual.signature);
+      expect(saved?.topDetails.type, GarmentType.tShirt);
+      await _tapVisible(tester, find.byKey(const Key('rating_edit_outfit')));
+      await _tapVisible(tester, find.byKey(const Key('rating-edit-Top')));
+      await _tapVisible(tester, find.byKey(const Key('rating-Top-color-Blue')));
+      await _tapVisible(tester, find.byKey(const Key('rating-editor-done')));
+      await _tapVisible(tester, find.byKey(const Key('rate_current_outfit')));
+      await _tapVisible(tester, find.byKey(const Key('favorite_rated_outfit')));
+      expect(saved?.topDetails.visualProfile, isNull);
+      expect(saved?.shirt.name, 'Blue');
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('specified top on a bike ride keeps protective pants in rating', (
     tester,
   ) async {

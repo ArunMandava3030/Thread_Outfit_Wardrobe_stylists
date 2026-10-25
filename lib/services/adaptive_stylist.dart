@@ -199,7 +199,35 @@ class AdaptiveStylist {
     if (details.type != null) {
       features['$garment:type:${details.type!.name}'] = 1;
     }
-    features['$garment:pattern:${details.pattern.name}'] = 1;
+    final visual = details.measuredVisual;
+    if (visual == null) {
+      features['$garment:pattern:${details.pattern.name}'] = 1;
+    } else {
+      features['$garment:visual:contrast'] = visual.contrast.clamp(0.0, 1.0);
+      features['$garment:visual:density'] = visual.detailDensity.clamp(
+        0.0,
+        1.0,
+      );
+      features['$garment:visual:direction'] = visual.directionality.clamp(
+        0.0,
+        1.0,
+      );
+      features['$garment:visual:regularity'] = visual.regularity.clamp(
+        0.0,
+        1.0,
+      );
+      for (final share in visual.palette) {
+        final colors = <String, double>{};
+        _colorFeatures(colors, '$garment:visual:palette', share.color.argb);
+        for (final entry in colors.entries) {
+          features.update(
+            entry.key,
+            (value) => value + entry.value * share.share,
+            ifAbsent: () => entry.value * share.share,
+          );
+        }
+      }
+    }
     final colors = details.accentColors.map((c) => c.argb).toSet().toList()
       ..sort();
     if (colors.isEmpty) return;

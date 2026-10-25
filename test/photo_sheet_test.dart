@@ -10,6 +10,74 @@ import 'package:thread_style/widgets/photo_analysis_sheet.dart';
 
 void main() {
   testWidgets(
+    'design mode skips pose and reads arbitrary visible detail without a pattern label',
+    (tester) async {
+      _setPhoneViewport(tester);
+      final bytes = await tester.runAsync(_makeDetailedPng);
+      PhotoAnalysisResult? result;
+      await _openSheet(
+        tester,
+        bytes: bytes!,
+        startInDesignMode: true,
+        onResult: (value) => result = value,
+      );
+      expect(find.text('Auto analyze'), findsNothing);
+      expect(find.byKey(const Key('read_garment_palette')), findsNothing);
+      expect(find.textContaining('Tap one corner'), findsOneWidget);
+      await _tapPhotoPoint(tester, const Offset(.05, .05));
+      await _tapPhotoPoint(tester, const Offset(.95, .95));
+      expect(find.text('Photo estimate'), findsOneWidget);
+      expect(find.textContaining('no pattern label is needed'), findsOneWidget);
+      expect(find.textContaining('%'), findsWidgets);
+      expect(find.byKey(const Key('garment_pattern_checks')), findsNothing);
+      await _tapVisible(
+        tester,
+        find.widgetWithText(FilledButton, 'Use this design'),
+      );
+      expect(result?.visualProfile?.isReliable, isTrue);
+      expect(result?.visualProfile?.hasDetail, isTrue);
+      expect(result?.visualProfile?.palette.length, greaterThanOrEqualTo(2));
+      expect(result?.visualProfile?.previewArgb.length, 256);
+      expect(result?.bodyShape, isNull);
+      expect(result?.skinToneArgb, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('design estimate can be canceled and narrow screen can confirm', (
+    tester,
+  ) async {
+    _setPhoneViewport(tester);
+    tester.view.physicalSize = const Size(320, 760);
+    tester.platformDispatcher.textScaleFactorTestValue = 1.6;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final bytes = await tester.runAsync(_makeTwoColourPng);
+    PhotoAnalysisResult? result;
+    for (final confirm in [false, true]) {
+      await _openSheet(
+        tester,
+        bytes: bytes!,
+        garmentLabel: 'shirt',
+        startInDesignMode: true,
+        onResult: (value) => result = value,
+      );
+      await _tapPhotoPoint(tester, const Offset(.05, .1));
+      await _tapPhotoPoint(tester, const Offset(.95, .9));
+      if (confirm) {
+        await _tapVisible(
+          tester,
+          find.widgetWithText(FilledButton, 'Use this design'),
+        );
+        expect(result?.visualProfile?.isReliable, isTrue);
+      } else {
+        await _tapVisible(tester, find.byTooltip('Close photo'));
+        expect(result, isNull);
+      }
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets(
     'garment region extracts multiple colors and confirms chosen main first',
     (tester) async {
       _setPhoneViewport(tester);
@@ -43,7 +111,7 @@ void main() {
       await _tapVisible(tester, swatch);
       await _tapVisible(
         tester,
-        find.widgetWithText(FilledButton, 'Use these colors'),
+        find.widgetWithText(FilledButton, 'Use this design'),
       );
       expect(result!.shirtColor!.argb, 0xFFC1926B);
       expect(result!.garmentPalette.map((color) => color.argb), [
@@ -52,6 +120,9 @@ void main() {
       ]);
       expect(result!.skinToneArgb, isNull);
       expect(result!.bodyShape, isNull);
+      expect(result!.visualProfile?.isReliable, isTrue);
+      expect(result!.visualProfile!.palette, hasLength(2));
+      expect(result!.visualProfile!.previewArgb, hasLength(256));
       expect(tester.takeException(), isNull);
     },
   );
@@ -86,6 +157,7 @@ void main() {
     await _tapVisible(tester, confirm);
     expect(result!.shirtColor!.argb, 0xFFC1926B);
     expect(result!.garmentPalette, isEmpty);
+    expect(result!.visualProfile, isNull);
     expect(tester.takeException(), isNull);
   });
 
@@ -160,7 +232,7 @@ void main() {
         garmentLabel: 'pants',
         onResult: (value) => result = value,
       );
-      expect(find.text('Find your pants colour'), findsOneWidget);
+      expect(find.text('Read your pants'), findsOneWidget);
       expect(find.text('Auto analyze'), findsNothing);
       final confirm = find.widgetWithText(
         FilledButton,
@@ -351,6 +423,43 @@ Future<Uint8List> _makeTwoColourPng() async {
   }
 }
 
+Future<Uint8List> _makeDetailedPng() async {
+  final recorder = ui.PictureRecorder();
+  final canvas = ui.Canvas(recorder);
+  canvas.drawRect(
+    const Rect.fromLTWH(0, 0, 80, 120),
+    ui.Paint()..color = const Color(0xFFF4F2EB),
+  );
+  // Irregular marks deliberately do not correspond to a named pattern chip.
+  for (var y = 3; y < 120; y += 7) {
+    for (var x = 2; x < 80; x += 9) {
+      canvas.drawCircle(
+        Offset((x + y % 5).toDouble(), y.toDouble()),
+        ((x + y) % 3 + 1).toDouble(),
+        ui.Paint()..color = const Color(0xFF25394F),
+      );
+      canvas.drawLine(
+        Offset(x.toDouble(), y.toDouble()),
+        Offset(x + 3.0, y + 4.0),
+        ui.Paint()
+          ..color = const Color(0xFFC94F4F)
+          ..strokeWidth = 2,
+      );
+    }
+  }
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(80, 120);
+  try {
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    return Uint8List.fromList(
+      data!.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+    );
+  } finally {
+    image.dispose();
+    picture.dispose();
+  }
+}
+
 Future<void> _openSheet(
   WidgetTester tester, {
   required Uint8List bytes,
@@ -359,6 +468,7 @@ Future<void> _openSheet(
   bool measureBody = false,
   String? garmentLabel,
   bool allowPalette = true,
+  bool startInDesignMode = false,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -378,6 +488,7 @@ Future<void> _openSheet(
                     measureBody: measureBody,
                     garmentLabel: garmentLabel,
                     allowPalette: allowPalette,
+                    startInDesignMode: startInDesignMode,
                   ),
                 );
                 onResult(result);

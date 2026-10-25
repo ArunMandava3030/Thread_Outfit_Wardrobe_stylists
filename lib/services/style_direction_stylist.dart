@@ -24,12 +24,13 @@ class StyleDirectionStylist {
         final garmentAware =
             outfit.topDetails.isSpecified || outfit.pantsDetails.isSpecified;
         final quietLayer =
-            outfit.topDetails.pattern != GarmentPattern.solid ||
-            outfit.pantsDetails.pattern != GarmentPattern.solid ||
-            outfit.topDetails.accentColors.isNotEmpty ||
-            outfit.pantsDetails.accentColors.isNotEmpty;
+            outfit.topDetails.needsQuietLayer ||
+            outfit.pantsDetails.needsQuietLayer;
         final layerTitle = quietLayer
             ? 'Plain ${recipe.$3.replaceAll(RegExp(r'[Tt]extured ?'), '').toLowerCase()}'
+            : outfit.topDetails.measuredVisual != null ||
+                  outfit.pantsDetails.measuredVisual != null
+            ? outfit.layer.title
             : recipe.$3;
         return _rebuild(
           outfit,
