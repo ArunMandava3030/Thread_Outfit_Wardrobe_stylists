@@ -171,6 +171,29 @@ class WeatherStylist {
           );
         }
 
+        if (outfit.pantsDetails.type != null &&
+            outfit.startingPiece != StartingPiece.pants) {
+          // Keep the garment category selected around the anchor (e.g. jeans
+          // beside flannel); weather adds fabric advice and outer protection.
+          pants = outfit.pants;
+          notes.add(
+            'Keep this ${outfit.pantsDetails.type!.label.toLowerCase()} option if its fabric suits the weather; check warmth and drying time before heading out.',
+          );
+        }
+        final quietLayer =
+            outfit.topDetails.pattern != GarmentPattern.solid ||
+            outfit.pantsDetails.pattern != GarmentPattern.solid ||
+            outfit.topDetails.accentColors.isNotEmpty ||
+            outfit.pantsDetails.accentColors.isNotEmpty;
+        if (quietLayer &&
+            layer.colorArgb != 0 &&
+            !layer.title.toLowerCase().startsWith('plain ')) {
+          layer = _rename(
+            layer,
+            'Plain ${layer.title.replaceAll(RegExp(r'[Tt]extured ?'), '').toLowerCase()}',
+          );
+        }
+
         final context = wet
             ? 'wet'
             : cold
@@ -266,6 +289,8 @@ OutfitRecommendation _copy(
     shirt: original.shirt,
     shirtTitle: original.shirtTitle,
     startingPiece: original.startingPiece,
+    topDetails: original.topDetails,
+    pantsDetails: original.pantsDetails,
     pants: newPants,
     shoes: newShoes,
     layer: newLayer,

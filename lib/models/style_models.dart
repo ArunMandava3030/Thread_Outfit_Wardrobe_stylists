@@ -1,3 +1,6 @@
+import 'garment_details.dart';
+export 'garment_details.dart';
+
 enum Occasion {
   office,
   date,
@@ -204,6 +207,8 @@ class OutfitRecommendation {
     this.safetyNote,
     this.startingPiece = StartingPiece.shirt,
     this.shirtTitle = 'Your shirt',
+    this.topDetails = const GarmentDetails(),
+    this.pantsDetails = const GarmentDetails(),
   });
 
   final String id;
@@ -219,6 +224,8 @@ class OutfitRecommendation {
   final String? safetyNote;
   final StartingPiece startingPiece;
   final String shirtTitle;
+  final GarmentDetails topDetails;
+  final GarmentDetails pantsDetails;
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -234,6 +241,8 @@ class OutfitRecommendation {
     'safetyNote': safetyNote,
     'startingPiece': startingPiece.name,
     'shirtTitle': shirtTitle,
+    'topDetails': topDetails.toJson(),
+    'pantsDetails': pantsDetails.toJson(),
   };
 
   factory OutfitRecommendation.fromJson(Map<String, dynamic> json) =>
@@ -256,6 +265,8 @@ class OutfitRecommendation {
             _enumOrNull(StartingPiece.values, json['startingPiece']) ??
             StartingPiece.shirt,
         shirtTitle: json['shirtTitle'] as String? ?? 'Your shirt',
+        topDetails: GarmentDetails.fromJson(json['topDetails']),
+        pantsDetails: GarmentDetails.fromJson(json['pantsDetails']),
       );
 }
 

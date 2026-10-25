@@ -5,6 +5,7 @@ import '../models/style_models.dart';
 import '../models/wardrobe_models.dart';
 import '../theme.dart';
 import '../widgets/garment_art.dart';
+import '../widgets/garment_details_editor.dart';
 
 class WardrobeScreen extends StatefulWidget {
   const WardrobeScreen({
@@ -52,7 +53,7 @@ class _WardrobeScreenState extends State<WardrobeScreen> {
         ),
         const SizedBox(height: 12),
         const Text(
-          'Add your everyday pieces. Start a look with a shirt or pants, or use your wardrobe colors to sort outfit ideas.',
+          'Add your everyday pieces. Start a look with a top or pants, including their pattern and colors.',
         ),
         const SizedBox(height: 20),
         FilledButton.icon(
@@ -133,7 +134,7 @@ class _WardrobeScreenState extends State<WardrobeScreen> {
           ),
         const SizedBox(height: 18),
         const Text(
-          'Wardrobe matches compare colors and clothing categories. Check the actual garment, fit and occasion before you wear it.',
+          'Wardrobe matches use colors and any type or pattern you add. Check the actual garment, fit and occasion before you wear it.',
           style: TextStyle(color: ThreadTheme.muted, fontSize: 12),
         ),
       ],
@@ -181,6 +182,7 @@ class _WardrobeCard extends StatelessWidget {
               WardrobeCategory.layer => GarmentKind.jacket,
             },
             color: Color(item.colorArgb),
+            details: item.details,
             size: 130,
           ),
         ),
@@ -191,6 +193,22 @@ class _WardrobeCard extends StatelessWidget {
           '${item.colorName} · ${item.hex}',
           style: const TextStyle(color: ThreadTheme.muted),
         ),
+        if (item.details.isSpecified) ...[
+          const SizedBox(height: 6),
+          Text(
+            item.details.summary(
+              item.category == WardrobeCategory.pants
+                  ? StartingPiece.pants
+                  : StartingPiece.shirt,
+            ),
+            style: const TextStyle(color: ThreadTheme.muted),
+          ),
+          if (item.details.accentColors.isNotEmpty)
+            Text(
+              'Also ${item.details.accentColors.map((color) => color.name).join(', ')}',
+              style: const TextStyle(color: ThreadTheme.muted),
+            ),
+        ],
         if (item.category == WardrobeCategory.shirt ||
             item.category == WardrobeCategory.pants) ...[
           const SizedBox(height: 16),
@@ -234,6 +252,7 @@ class _WardrobeItemDialogState extends State<_WardrobeItemDialog> {
   late WardrobeCategory _category;
   late String _colorName;
   late int _colorArgb;
+  late GarmentDetails _details;
 
   @override
   void initState() {
@@ -241,6 +260,7 @@ class _WardrobeItemDialogState extends State<_WardrobeItemDialog> {
     final existing = widget.existing;
     _name = TextEditingController(text: existing?.name ?? '');
     _category = existing?.category ?? WardrobeCategory.shirt;
+    _details = existing?.details ?? const GarmentDetails();
     _colorName = existing?.colorName ?? ShirtColor.presets.first.name;
     _colorArgb = existing?.colorArgb ?? ShirtColor.presets.first.argb;
     _hex = TextEditingController(text: _hexFor(_colorArgb));
@@ -257,6 +277,23 @@ class _WardrobeItemDialogState extends State<_WardrobeItemDialog> {
     final raw = value.trim().replaceFirst(RegExp(r'^#'), '');
     if (!RegExp(r'^[a-fA-F0-9]{6}$').hasMatch(raw)) return null;
     return 0xFF000000 | int.parse(raw, radix: 16);
+  }
+
+  Future<void> _editDetails() async {
+    final color = _parseColor(_hex.text);
+    if (color == null) return;
+    final result = await showGarmentDetailsEditor(
+      context,
+      startingPiece: _category == WardrobeCategory.pants
+          ? StartingPiece.pants
+          : StartingPiece.shirt,
+      initial: _details,
+      mainColor: ShirtColor(
+        name: color == _colorArgb ? _colorName : 'Custom',
+        argb: color,
+      ),
+    );
+    if (result != null && mounted) setState(() => _details = result);
   }
 
   void _save() {
@@ -278,6 +315,7 @@ class _WardrobeItemDialogState extends State<_WardrobeItemDialog> {
         colorName: color == _colorArgb ? _colorName : 'Custom',
         colorArgb: color,
         category: _category,
+        details: _details,
       ),
     );
   }
@@ -332,7 +370,12 @@ class _WardrobeItemDialogState extends State<_WardrobeItemDialog> {
                   ),
               ],
               onChanged: (value) {
-                if (value != null) setState(() => _category = value);
+                if (value != null && value != _category) {
+                  setState(() {
+                    _category = value;
+                    _details = const GarmentDetails();
+                  });
+                }
               },
             ),
             const SizedBox(height: 22),
@@ -351,6 +394,11 @@ class _WardrobeItemDialogState extends State<_WardrobeItemDialog> {
                       message: color.name,
                       child: InkWell(
                         onTap: () => setState(() {
+                          if (_parseColor(_hex.text) != color.argb) {
+                            _details = _details.copyWith(
+                              accentColors: const [],
+                            );
+                          }
                           _colorArgb = color.argb;
                           _colorName = color.name;
                           _hex.text = _hexFor(color.argb);
@@ -394,11 +442,35 @@ class _WardrobeItemDialogState extends State<_WardrobeItemDialog> {
                 labelText: 'Or enter a color hex',
                 hintText: '#9BAE98',
               ),
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) => setState(() {
+                _details = _details.copyWith(accentColors: const []);
+              }),
               validator: (value) => _parseColor(value ?? '') == null
                   ? 'Use 6 hex digits, like #9BAE98.'
                   : null,
             ),
+            if (_category == WardrobeCategory.shirt ||
+                _category == WardrobeCategory.pants) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                key: const Key('wardrobe_details'),
+                onPressed: _parseColor(_hex.text) == null ? null : _editDetails,
+                icon: const Icon(Icons.tune_rounded, size: 18),
+                label: const Text('Type & pattern'),
+              ),
+              if (_details.isSpecified)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    _details.summary(
+                      _category == WardrobeCategory.pants
+                          ? StartingPiece.pants
+                          : StartingPiece.shirt,
+                    ),
+                    style: const TextStyle(color: ThreadTheme.muted),
+                  ),
+                ),
+            ],
           ],
         ),
       ),

@@ -151,6 +151,8 @@ class AdaptiveStylist {
     _colorFeatures(base, 'shoes', outfit.shoes.colorArgb);
     _garmentFeatures(base, 'pants', outfit.pants.title);
     _garmentFeatures(base, 'top', outfit.shirtTitle);
+    _detailFeatures(base, 'top', outfit.topDetails);
+    _detailFeatures(base, 'pants', outfit.pantsDetails);
     _garmentFeatures(base, 'shoes', outfit.shoes.title);
     if (hasLayer) {
       _colorFeatures(base, 'layer', outfit.layer.colorArgb);
@@ -184,6 +186,39 @@ class AdaptiveStylist {
       for (final feature in base.entries)
         '${outfit.occasion.name}:${feature.key}': 0.8 * feature.value / norm,
     };
+  }
+
+  void _detailFeatures(
+    Map<String, double> features,
+    String garment,
+    GarmentDetails details,
+  ) {
+    // Legacy votes have no invented category/pattern labels. Confirmed patterns
+    // and colors transfer to new outfits without treating outfit IDs as inputs.
+    if (!details.isSpecified) return;
+    if (details.type != null) {
+      features['$garment:type:${details.type!.name}'] = 1;
+    }
+    features['$garment:pattern:${details.pattern.name}'] = 1;
+    final colors = details.accentColors.map((c) => c.argb).toSet().toList()
+      ..sort();
+    if (colors.isEmpty) return;
+    final sums = <String, double>{};
+    for (final color in colors) {
+      final sample = <String, double>{};
+      _colorFeatures(sample, '$garment:accent', color);
+      for (final entry in sample.entries) {
+        sums.update(
+          entry.key,
+          (value) => value + entry.value,
+          ifAbsent: () => entry.value,
+        );
+      }
+    }
+    for (final entry in sums.entries) {
+      features[entry.key] = entry.value / colors.length;
+    }
+    features['$garment:multicolor'] = 1;
   }
 
   void _garmentFeatures(

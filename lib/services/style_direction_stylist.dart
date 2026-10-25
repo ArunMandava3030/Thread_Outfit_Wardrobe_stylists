@@ -21,17 +21,28 @@ class StyleDirectionStylist {
         }
         final recipe = _recipe(direction, outfit.occasion);
         final hasLayer = outfit.layer.colorArgb != 0;
+        final garmentAware =
+            outfit.topDetails.isSpecified || outfit.pantsDetails.isSpecified;
+        final quietLayer =
+            outfit.topDetails.pattern != GarmentPattern.solid ||
+            outfit.pantsDetails.pattern != GarmentPattern.solid ||
+            outfit.topDetails.accentColors.isNotEmpty ||
+            outfit.pantsDetails.accentColors.isNotEmpty;
+        final layerTitle = quietLayer
+            ? 'Plain ${recipe.$3.replaceAll(RegExp(r'[Tt]extured ?'), '').toLowerCase()}'
+            : recipe.$3;
         return _rebuild(
           outfit,
           direction,
-          pants: outfit.startingPiece == StartingPiece.pants
+          pants: outfit.startingPiece == StartingPiece.pants || garmentAware
               ? outfit.pants
               : _rename(outfit.pants, recipe.$1),
-          shirtTitle: outfit.startingPiece == StartingPiece.pants
+          shirtTitle:
+              outfit.startingPiece == StartingPiece.pants && !garmentAware
               ? _topRecipe(direction, outfit.occasion)
               : outfit.shirtTitle,
           shoes: _rename(outfit.shoes, recipe.$2),
-          layer: hasLayer ? _rename(outfit.layer, recipe.$3) : outfit.layer,
+          layer: hasLayer ? _rename(outfit.layer, layerTitle) : outfit.layer,
           reason:
               (outfit.occasion == Occasion.office ||
                       outfit.occasion == Occasion.special) &&
@@ -197,6 +208,8 @@ OutfitRecommendation _rebuild(
     shirt: original.shirt,
     shirtTitle: selectedShirtTitle,
     startingPiece: original.startingPiece,
+    topDetails: original.topDetails,
+    pantsDetails: original.pantsDetails,
     pants: selectedPants,
     shoes: selectedShoes,
     layer: selectedLayer,

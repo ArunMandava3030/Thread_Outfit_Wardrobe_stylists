@@ -24,6 +24,7 @@ import 'services/style_engine.dart';
 import 'services/style_store.dart';
 import 'theme.dart';
 import 'widgets/garment_art.dart';
+import 'widgets/garment_details_editor.dart';
 import 'widgets/outfit_card.dart';
 import 'widgets/photo_analysis_sheet.dart';
 import 'widgets/weather_panel.dart';
@@ -94,6 +95,7 @@ class _StyleHomeState extends State<StyleHome> {
   int _profileVersion = 0;
   ShirtColor _shirt = ShirtColor.presets.first;
   StartingPiece _startingPiece = StartingPiece.shirt;
+  GarmentDetails _garmentDetails = const GarmentDetails();
   ShirtColor? _matchingColor;
   int _studioStep = 0;
   Occasion _occasion = Occasion.casual;
@@ -198,6 +200,9 @@ class _StyleHomeState extends State<StyleHome> {
               _startingPiece = mode == 1
                   ? StartingPiece.pants
                   : StartingPiece.shirt;
+              _garmentDetails = GarmentDetails(
+                accentColors: result.garmentPalette.skip(1).toList(),
+              );
               _matchingColor = null;
               _studioStep = 0;
             });
@@ -253,12 +258,33 @@ class _StyleHomeState extends State<StyleHome> {
   });
 
   void _chooseAnchor(ShirtColor color, {StartingPiece? piece}) {
+    if (color.argb == _shirt.argb &&
+        (piece == null || piece == _startingPiece)) {
+      return;
+    }
     _invalidate(() {
+      _garmentDetails = piece != null && piece != _startingPiece
+          ? const GarmentDetails()
+          : _garmentDetails.copyWith(accentColors: const []);
       _shirt = color;
       _startingPiece = piece ?? _startingPiece;
       _matchingColor = null;
       _photo = null;
       _studioStep = 0;
+    });
+  }
+
+  Future<void> _editGarmentDetails() async {
+    final details = await showGarmentDetailsEditor(
+      context,
+      startingPiece: _startingPiece,
+      initial: _garmentDetails,
+      mainColor: _shirt,
+    );
+    if (!mounted || details == null) return;
+    _invalidate(() {
+      _garmentDetails = details;
+      _matchingColor = null;
     });
   }
 
@@ -269,6 +295,7 @@ class _StyleHomeState extends State<StyleHome> {
             .matchingColors(
               startingPiece: _startingPiece,
               color: _shirt,
+              details: _garmentDetails,
               profile: _profile,
             )
             .first;
@@ -290,6 +317,7 @@ class _StyleHomeState extends State<StyleHome> {
     bool sampleSkin = false,
     bool measureBody = false,
     String? garmentLabel,
+    bool allowPalette = true,
   }) => showModalBottomSheet<PhotoAnalysisResult>(
     context: context,
     isScrollControlled: true,
@@ -300,6 +328,7 @@ class _StyleHomeState extends State<StyleHome> {
       sampleSkin: sampleSkin,
       measureBody: measureBody,
       garmentLabel: garmentLabel,
+      allowPalette: allowPalette,
     ),
   );
 
@@ -309,6 +338,7 @@ class _StyleHomeState extends State<StyleHome> {
     ImageSource? source,
     String? garmentLabel,
     bool updateStudio = true,
+    bool allowPalette = true,
     ValueChanged<Uint8List>? onPhotoLoaded,
   }) async {
     if (_picking) return null;
@@ -367,6 +397,7 @@ class _StyleHomeState extends State<StyleHome> {
       onPhotoLoaded?.call(bytes);
       final result = await _analyzeBytes(
         bytes,
+        allowPalette: allowPalette,
         sampleSkin: sampleSkin,
         measureBody: measureBody,
         garmentLabel:
@@ -384,10 +415,18 @@ class _StyleHomeState extends State<StyleHome> {
           result.shirtColor != null) {
         _invalidate(() {
           _shirt = result.shirtColor!;
+          _garmentDetails = _garmentDetails.copyWith(
+            accentColors: result.garmentPalette.skip(1).toList(),
+          );
           _photo = bytes;
           _matchingColor = null;
           _studioStep = 0;
         });
+        if (result.garmentPalette.length > 1) {
+          _message(
+            'Colors added. Use Type & pattern to confirm checks, stripes or prints.',
+          );
+        }
       }
       return result;
     } on PlatformException catch (error) {
@@ -445,6 +484,7 @@ class _StyleHomeState extends State<StyleHome> {
       _photo = null;
       _shirt = ShirtColor.presets.first;
       _startingPiece = StartingPiece.shirt;
+      _garmentDetails = const GarmentDetails();
       _matchingColor = null;
       _studioStep = 0;
       _profileVersion++;
@@ -581,6 +621,7 @@ class _StyleHomeState extends State<StyleHome> {
   void _wear(WardrobeItem item) {
     _invalidate(() {
       _shirt = ShirtColor(name: item.colorName, argb: item.colorArgb);
+      _garmentDetails = item.details;
       _photo = null;
       _startingPiece = item.category == WardrobeCategory.pants
           ? StartingPiece.pants
@@ -725,6 +766,7 @@ class _StyleHomeState extends State<StyleHome> {
                           final sample = await _analyzeBytes(
                             outfitPhoto!,
                             garmentLabel: label.toLowerCase(),
+                            allowPalette: false,
                           );
                           return sample?.shirtColor;
                         }
@@ -732,6 +774,7 @@ class _StyleHomeState extends State<StyleHome> {
                       final result = await _pickPhoto(
                         garmentLabel: label.toLowerCase(),
                         updateStudio: false,
+                        allowPalette: false,
                         onPhotoLoaded: (bytes) => outfitPhoto = bytes,
                       );
                       return result?.shirtColor;
@@ -781,6 +824,7 @@ class _StyleHomeState extends State<StyleHome> {
       var candidates = const StyleEngine().generateForItem(
         startingPiece: _startingPiece,
         color: _shirt,
+        details: _garmentDetails,
         matchingColor: _matchingColor,
         occasion: _occasion,
         profile: _profile,
@@ -1170,6 +1214,7 @@ class _StyleHomeState extends State<StyleHome> {
     final colors = const StyleEngine().matchingColors(
       startingPiece: _startingPiece,
       color: _shirt,
+      details: _garmentDetails,
       profile: _profile,
     );
     final other = _startingPiece == StartingPiece.pants ? 'top' : 'pants';
@@ -1370,6 +1415,7 @@ class _StyleHomeState extends State<StyleHome> {
                             ? GarmentKind.pants
                             : GarmentKind.shirt,
                         color: Color(_shirt.argb),
+                        details: _garmentDetails,
                         size: 70,
                       )
                     : Image.memory(
@@ -1385,13 +1431,16 @@ class _StyleHomeState extends State<StyleHome> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${_shirt.name} ${_startingPiece.itemLabel.toLowerCase()}',
+                    '${_shirt.name} ${_garmentDetails.type?.label.toLowerCase() ?? _startingPiece.itemLabel.toLowerCase()}',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 4),
-                  const Text(
-                    'Choose its color below.',
-                    style: TextStyle(color: ThreadTheme.muted),
+                  Text(
+                    _garmentDetails.isSpecified
+                        ? '${_garmentDetails.summary(_startingPiece)}'
+                              '${_garmentDetails.accentColors.isEmpty ? '' : ' · ${_garmentDetails.accentColors.map((c) => c.name).join(' + ')} accents'}'
+                        : 'Choose its color below.',
+                    style: const TextStyle(color: ThreadTheme.muted),
                   ),
                 ],
               ),
@@ -1450,21 +1499,44 @@ class _StyleHomeState extends State<StyleHome> {
           ],
         ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
+        Row(
           children: [
-            TextButton.icon(
-              key: const Key('add_photo'),
-              onPressed: _picking ? null : () => _pickPhoto(),
-              icon: const Icon(Icons.add_a_photo_outlined, size: 18),
-              label: Text(_picking ? 'Opening photo…' : 'Use a photo'),
+            Expanded(
+              child: TextButton.icon(
+                key: const Key('edit_garment_details'),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: const Size(0, 44),
+                  visualDensity: VisualDensity.standard,
+                  textStyle: const TextStyle(fontSize: 13),
+                ),
+                onPressed: _editGarmentDetails,
+                icon: const Icon(Icons.texture, size: 18),
+                label: const Text(
+                  'Type & pattern',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ),
-            IconButton(
-              tooltip: 'Choose from gallery',
-              onPressed: _picking
-                  ? null
-                  : () => _pickPhoto(source: ImageSource.gallery),
-              icon: const Icon(Icons.photo_library_outlined, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextButton.icon(
+                key: const Key('add_photo'),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: const Size(0, 44),
+                  visualDensity: VisualDensity.standard,
+                  textStyle: const TextStyle(fontSize: 13),
+                ),
+                onPressed: _picking ? null : () => _pickPhoto(),
+                icon: const Icon(Icons.add_a_photo_outlined, size: 18),
+                label: Text(
+                  _picking ? 'Opening photo…' : 'Use a photo',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ),
           ],
         ),

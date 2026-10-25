@@ -6,6 +6,78 @@ import 'package:thread_style/models/style_models.dart';
 import 'package:thread_style/services/style_engine.dart';
 
 void main() {
+  testWidgets(
+    'checked flannel keeps its palette through the simple guest flow',
+    (tester) async {
+      await _pump(tester);
+      await _tap(tester, find.byKey(const Key('guest_color_Red')));
+      await _tap(tester, find.byKey(const Key('guest_garment_details')));
+      await _tap(tester, find.byType(DropdownButtonFormField<GarmentType>));
+      await _tap(tester, find.text('Flannel shirt').last);
+      await _tap(tester, find.byKey(const Key('garment_pattern_checks')));
+      await _tap(tester, find.byKey(const Key('garment_accent_Navy_ff25394f')));
+      await _tap(
+        tester,
+        find.byKey(const Key('garment_accent_White_fff4f2eb')),
+      );
+      await _tap(tester, find.byKey(const Key('garment_details_done')));
+      await _tap(tester, find.byKey(const Key('guest_continue')));
+      await _tap(tester, find.byKey(const Key('guest_continue')));
+      await _tap(tester, find.byKey(const Key('guest_generate')));
+      final outfit = tester
+          .widget<GuestOutfitCard>(find.byType(GuestOutfitCard))
+          .outfit;
+      expect(outfit.topDetails.type, GarmentType.flannel);
+      expect(outfit.topDetails.pattern, GarmentPattern.checks);
+      expect(outfit.topDetails.accentColors.map((color) => color.name), [
+        'Navy',
+        'White',
+      ]);
+      expect(outfit.pantsDetails.pattern, GarmentPattern.solid);
+      expect(outfit.shirt.name, 'Red');
+      expect(
+        find.textContaining('Checks / plaid · Navy, White'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'details cancel keeps match, color clears accents, switching piece resets all',
+    (tester) async {
+      await _pump(tester);
+      await _tap(tester, find.byKey(const Key('guest_start_pants')));
+      await _tap(tester, find.byKey(const Key('guest_garment_details')));
+      await _tap(tester, find.byKey(const Key('garment_pattern_checks')));
+      await _tap(
+        tester,
+        find.byKey(const Key('garment_accent_White_fff4f2eb')),
+      );
+      await _tap(tester, find.byKey(const Key('garment_details_done')));
+      await _tap(tester, find.byKey(const Key('guest_continue')));
+      await _tap(tester, find.byKey(const Key('guest_continue')));
+      await _tap(tester, find.byKey(const Key('guest_generate')));
+      final outfit = tester
+          .widget<GuestOutfitCard>(find.byType(GuestOutfitCard))
+          .outfit;
+      expect(outfit.pantsDetails.pattern, GarmentPattern.checks);
+      expect(outfit.topDetails.pattern, GarmentPattern.solid);
+      await _tap(tester, find.byKey(const Key('guest_restart')));
+      await _tap(tester, find.byKey(const Key('guest_garment_details')));
+      await _tap(tester, find.byKey(const Key('garment_pattern_print')));
+      await _tap(tester, find.byKey(const Key('garment_details_cancel')));
+      expect(find.text('Checked pants'), findsOneWidget);
+      await _tap(tester, find.byKey(const Key('guest_color_Navy')));
+      expect(find.text('Checked pants'), findsOneWidget);
+      expect(find.text('Also White'), findsNothing);
+      await _tap(tester, find.byKey(const Key('guest_start_shirt')));
+      expect(find.text('Type & pattern'), findsOneWidget);
+      expect(find.text('Checked pants'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('390px phone keeps each basic next action inside the viewport', (
     tester,
   ) async {

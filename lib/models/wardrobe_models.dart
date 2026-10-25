@@ -1,3 +1,5 @@
+import 'garment_details.dart';
+
 enum WardrobeCategory {
   shirt,
   pants,
@@ -19,6 +21,7 @@ class WardrobeItem {
     required this.colorName,
     required this.colorArgb,
     required this.category,
+    this.details = const GarmentDetails(),
   });
 
   final String id;
@@ -26,6 +29,7 @@ class WardrobeItem {
   final String colorName;
   final int colorArgb;
   final WardrobeCategory category;
+  final GarmentDetails details;
 
   String get hex =>
       '#${(colorArgb & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
@@ -36,6 +40,7 @@ class WardrobeItem {
     'colorName': colorName,
     'colorArgb': colorArgb,
     'category': category.name,
+    'details': details.toJson(),
   };
 
   factory WardrobeItem.fromJson(Map<String, dynamic> json) {
@@ -66,6 +71,7 @@ class WardrobeItem {
       colorName: colorName.trim(),
       colorArgb: color,
       category: category,
+      details: GarmentDetails.fromJson(json['details']),
     );
   }
 }

@@ -10,11 +10,98 @@ import 'package:thread_style/widgets/outfit_card.dart';
 
 void main() {
   testWidgets(
+    'checked flannel details reach matches, favorites and rating',
+    (tester) async {
+      final store = _GuidedStore();
+      await _mount(tester, store);
+      await _tap(tester, find.byKey(const Key('starting_color_Red')));
+      await _tap(tester, find.byKey(const Key('edit_garment_details')));
+      await _tap(tester, find.byType(DropdownButtonFormField<GarmentType>));
+      await _tap(tester, find.text('Flannel shirt').last);
+      await _tap(tester, find.byKey(const Key('garment_pattern_checks')));
+      await _tap(tester, find.text('Black').last);
+      await _tap(tester, find.byKey(const Key('garment_details_done')));
+      await _tap(tester, find.byKey(const Key('studio_next')));
+      final selected = tester.widget<ChoiceChip>(
+        find.byKey(const Key('matching_suggestion_0')),
+      );
+      expect((selected.label as Text).data, 'Black');
+      await _tap(tester, find.byKey(const Key('studio_next')));
+      await _tap(tester, find.byKey(const Key('occasion_date')));
+      await _tap(tester, find.byKey(const Key('generate_outfits')));
+      final outfit = tester.widget<OutfitCard>(find.byType(OutfitCard)).outfit;
+      expect(outfit.topDetails.type, GarmentType.flannel);
+      expect(outfit.topDetails.pattern, GarmentPattern.checks);
+      expect(outfit.topDetails.accentColors.single.name, 'Black');
+      expect(outfit.pantsDetails.pattern, GarmentPattern.solid);
+      await _tap(tester, find.text('Favorite outfit'));
+      expect(
+        store.saved.single.topDetails.toJson(),
+        outfit.topDetails.toJson(),
+      );
+      await _tap(tester, find.text('Outfit details'));
+      await _tap(tester, find.text('Rate this outfit'));
+      expect(
+        tester
+            .widget<OutfitRatingScreen>(find.byType(OutfitRatingScreen))
+            .initialOutfit!
+            .topDetails
+            .toJson(),
+        outfit.topDetails.toJson(),
+      );
+      expect(tester.takeException(), isNull);
+    },
+    variant: TargetPlatformVariant({TargetPlatform.linux}),
+  );
+
+  testWidgets(
+    'changing main color clears accents and changing anchor clears type',
+    (tester) async {
+      await _mount(tester, _GuidedStore());
+      await _tap(tester, find.byKey(const Key('edit_garment_details')));
+      await _tap(tester, find.byKey(const Key('garment_pattern_checks')));
+      await _tap(tester, find.text('Black').last);
+      await _tap(tester, find.byKey(const Key('garment_details_done')));
+      await _tap(tester, find.byKey(const Key('starting_color_Blue')));
+      await _tap(tester, find.byKey(const Key('edit_garment_details')));
+      expect(
+        tester
+            .widget<ChoiceChip>(find.byKey(const Key('garment_pattern_checks')))
+            .selected,
+        isTrue,
+      );
+      expect(
+        tester
+            .widget<FilterChip>(find.widgetWithText(FilterChip, 'Black'))
+            .selected,
+        isFalse,
+      );
+      await _tap(tester, find.byKey(const Key('garment_details_cancel')));
+      await _tap(tester, find.byKey(const Key('starting_piece_pants')));
+      await _tap(tester, find.byKey(const Key('edit_garment_details')));
+      expect(
+        tester
+            .widget<ChoiceChip>(find.byKey(const Key('garment_pattern_solid')))
+            .selected,
+        isTrue,
+      );
+      expect(find.byKey(const ValueKey('garment_type_any')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+    variant: TargetPlatformVariant({TargetPlatform.linux}),
+  );
+
+  testWidgets(
     'phone quick path uses a ready matching color and reachable Continue buttons',
     (tester) async {
       await _mount(tester, _GuidedStore());
       final next = find.byKey(const Key('studio_next'));
-      expect(next.hitTestable(), findsOneWidget);
+      expect(
+        next.hitTestable(),
+        findsOneWidget,
+        reason:
+            'Next bounds: ${tester.getRect(next)}; details: ${tester.getRect(find.byKey(const Key('edit_garment_details')))}; photo: ${tester.getRect(find.byKey(const Key('add_photo')))}',
+      );
       await tester.tap(next);
       await tester.pumpAndSettle();
 

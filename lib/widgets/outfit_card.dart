@@ -63,6 +63,8 @@ class OutfitCard extends StatelessWidget {
                 pants: Color(outfit.pants.colorArgb),
                 shoes: Color(outfit.shoes.colorArgb),
                 layer: Color(outfit.layer.colorArgb),
+                topDetails: outfit.topDetails,
+                pantsDetails: outfit.pantsDetails,
               ),
               Positioned(
                 top: 15,
@@ -127,6 +129,7 @@ class OutfitCard extends StatelessWidget {
               Text(outfit.title, style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 10),
               _PieceLine(
+                details: outfit.topDetails,
                 piece: OutfitPiece(
                   category: 'Top',
                   title: outfit.shirtTitle,
@@ -134,7 +137,7 @@ class OutfitCard extends StatelessWidget {
                   colorArgb: outfit.shirt.argb,
                 ),
               ),
-              _PieceLine(piece: outfit.pants),
+              _PieceLine(piece: outfit.pants, details: outfit.pantsDetails),
               _PieceLine(piece: outfit.shoes),
               if (outfit.layer.colorArgb != 0) _PieceLine(piece: outfit.layer),
               if (wardrobeMatches != null && wardrobeMatches! > 0) ...[
@@ -203,8 +206,12 @@ class OutfitCard extends StatelessWidget {
 }
 
 class _PieceLine extends StatelessWidget {
-  const _PieceLine({required this.piece});
+  const _PieceLine({
+    required this.piece,
+    this.details = const GarmentDetails(),
+  });
   final OutfitPiece piece;
+  final GarmentDetails details;
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 5),
@@ -222,7 +229,9 @@ class _PieceLine extends StatelessWidget {
         const SizedBox(width: 9),
         Expanded(
           child: Text(
-            '${piece.colorName} ${piece.title}',
+            '${piece.colorName} ${piece.title}'
+            '${details.pattern == GarmentPattern.solid ? '' : ' · ${details.pattern.label}'}'
+            '${details.accentColors.isEmpty ? '' : ' · ${details.accentColors.map((c) => c.name).join(' + ')} accents'}',
             style: const TextStyle(fontSize: 12),
           ),
         ),
@@ -334,10 +343,12 @@ class _OutfitDetails extends StatelessWidget {
               pants: Color(outfit.pants.colorArgb),
               shoes: Color(outfit.shoes.colorArgb),
               layer: Color(outfit.layer.colorArgb),
+              topDetails: outfit.topDetails,
+              pantsDetails: outfit.pantsDetails,
               height: 235,
             ),
             Text(
-              'The color story',
+              'Why these pieces work',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 12),
@@ -383,7 +394,7 @@ class _OutfitDetails extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: () async {
                   final text =
-                      '${outfit.title} · ${outfit.occasion.label}\nTop: ${outfit.shirt.name} ${outfit.shirtTitle}\nPants: ${outfit.pants.colorName} ${outfit.pants.title}\nShoes: ${outfit.shoes.colorName} ${outfit.shoes.title}\nLayer: ${outfit.layer.colorName} ${outfit.layer.title}\n\n${outfit.fitAdvice}${outfit.safetyNote == null ? '' : '\n${outfit.safetyNote}'}';
+                      '${outfit.title} · ${outfit.occasion.label}\nTop: ${outfit.shirt.name} ${outfit.shirtTitle}${_detailsText(outfit.topDetails, StartingPiece.shirt)}\nPants: ${outfit.pants.colorName} ${outfit.pants.title}${_detailsText(outfit.pantsDetails, StartingPiece.pants)}\nShoes: ${outfit.shoes.colorName} ${outfit.shoes.title}\nLayer: ${outfit.layer.colorName} ${outfit.layer.title}\n\n${outfit.fitAdvice}${outfit.safetyNote == null ? '' : '\n${outfit.safetyNote}'}';
                   try {
                     await Clipboard.setData(ClipboardData(text: text));
                     if (context.mounted) {
@@ -415,3 +426,8 @@ class _OutfitDetails extends StatelessWidget {
     ),
   );
 }
+
+String _detailsText(GarmentDetails details, StartingPiece piece) =>
+    !details.isSpecified
+    ? ''
+    : ' (${details.summary(piece)}${details.accentColors.isEmpty ? '' : '; accents: ${details.accentColors.map((c) => c.name).join(', ')}'})';

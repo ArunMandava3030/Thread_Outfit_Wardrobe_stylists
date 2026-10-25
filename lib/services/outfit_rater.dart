@@ -150,6 +150,7 @@ class OutfitRater {
         input.bottom == RatingBottom.track &&
             input.shoes == RatingShoes.sneakers &&
             input.top != RatingTop.shirt &&
+            input.top != RatingTop.flannel &&
             {RatingLayer.none, RatingLayer.jacket}.contains(input.layer),
       StyleDirection.preppy =>
         {
@@ -209,11 +210,59 @@ class OutfitRater {
       );
     }
     if (accents <= 1) score += .15;
+    final patternedTop =
+        input.topDetails.pattern != GarmentPattern.solid ||
+        input.topDetails.accentColors.isNotEmpty;
+    final patternedPants =
+        input.pantsDetails.pattern != GarmentPattern.solid ||
+        input.pantsDetails.accentColors.isNotEmpty;
+    if (patternedTop && patternedPants) {
+      score -= .35;
+      suggestions.add(
+        'Both the top and pants have patterns or multiple colors. For an easier pairing, make one piece solid; if you enjoy mixing patterns, vary their scale and repeat a shared color.',
+      );
+    } else if (patternedTop || patternedPants) {
+      final details = patternedTop ? input.topDetails : input.pantsDetails;
+      final otherColor = patternedTop ? input.pantsColor : input.topColor;
+      final design = details.pattern == GarmentPattern.solid
+          ? 'palette'
+          : 'pattern';
+      final sharesAccent = details.accentColors.any(
+        (color) => _similarColor(color.argb, otherColor.argb),
+      );
+      if (sharesAccent) {
+        score += .15;
+        suggestions.add(
+          'Your solid ${patternedTop ? 'pants' : 'top'} repeats a color from the $design, which helps connect the outfit. Keep extra layers simple.',
+        );
+      } else {
+        suggestions.add(
+          details.accentColors.isEmpty
+              ? 'Keep the ${patternedTop ? 'pants' : 'top'} solid so the pattern stands out. Add its other colors in Edit for a more specific palette check.'
+              : 'For another combination, try solid ${patternedTop ? 'pants' : 'tops'} in ${details.accentColors.map((color) => color.name.toLowerCase()).join(' or ')} to repeat a color from the $design.',
+        );
+      }
+    }
     return RatingComponent(
-      'Color coordination',
+      patternedTop || patternedPants
+          ? 'Color and pattern coordination'
+          : 'Color coordination',
       score.clamp(0.0, 5.0),
-      'Palette balance is estimated from the selected garment colors, with room for intentional bold combinations.',
+      patternedTop || patternedPants
+          ? 'Palette balance uses the main colors and confirmed accents. A shared accent with a solid piece adds 0.15 here; two patterned or multicolor pieces subtract 0.35 for visual complexity. Pattern mixing can be intentional.'
+          : 'Palette balance is estimated from the selected garment colors, with room for intentional bold combinations.',
     );
+  }
+
+  bool _similarColor(int left, int right) {
+    if (left == right) return true;
+    final a = HSVColor.fromColor(Color(left));
+    final b = HSVColor.fromColor(Color(right));
+    final distance = (a.hue - b.hue).abs();
+    final hueDistance = math.min(distance, 360 - distance);
+    return (a.value - b.value).abs() < .18 &&
+        (a.saturation - b.saturation).abs() < .20 &&
+        ((a.saturation < .18 && b.saturation < .18) || hueDistance < 18);
   }
 
   RatingComponent _occasion(OutfitRatingInput input, List<String> suggestions) {
@@ -288,6 +337,11 @@ class OutfitRater {
         score -= .25;
         suggestions.add(
           'A lightweight overshirt or unstructured blazer can dress up your T-shirt.',
+        );
+      }
+      if (input.top == RatingTop.flannel) {
+        suggestions.add(
+          'A flannel shirt reads relaxed. Keep the pants and shoes neat for smart casual; use a lighter button-up if the venue expects a dressier look.',
         );
       }
       if ((input.occasion == Occasion.date ||

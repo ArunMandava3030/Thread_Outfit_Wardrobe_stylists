@@ -23,6 +23,8 @@ OutfitRatingInput _input({
   FitComfort comfort = FitComfort.unknown,
   TrouserHem hem = TrouserHem.unknown,
   SilhouetteFit silhouette = SilhouetteFit.unknown,
+  GarmentDetails topDetails = const GarmentDetails(),
+  GarmentDetails pantsDetails = const GarmentDetails(),
 }) => OutfitRatingInput(
   top: top,
   topColor: topColor,
@@ -38,6 +40,8 @@ OutfitRatingInput _input({
   comfort: comfort,
   hem: hem,
   silhouette: silhouette,
+  topDetails: topDetails,
+  pantsDetails: pantsDetails,
 );
 
 final _now = DateTime.utc(2026, 10, 18, 12);
@@ -63,6 +67,95 @@ TrendSnapshot _snapshot({
 
 void main() {
   const rater = OutfitRater();
+
+  test(
+    'sampled multicolor palette affects coordination without inventing a pattern',
+    () {
+      final input = _input(
+        topColor: _red,
+        topDetails: const GarmentDetails(accentColors: [_navy, _white]),
+      );
+      final result = rater.rate(input);
+      expect(result.suggestions.join(' '), contains('from the palette'));
+      expect(result.outfit.topDetails.pattern, GarmentPattern.solid);
+      expect(result.outfit.topDetails.accentColors, hasLength(2));
+      expect(
+        result.score,
+        greaterThan(rater.rate(_input(topColor: _red)).score),
+      );
+    },
+  );
+
+  test(
+    'checked flannel rates its accents and saves distinct pattern metadata',
+    () {
+      const details = GarmentDetails(
+        type: GarmentType.flannel,
+        pattern: GarmentPattern.checks,
+        accentColors: [_navy, _white],
+      );
+      final checked = _input(
+        top: RatingTop.flannel,
+        topColor: _red,
+        topDetails: details,
+      );
+      final result = rater.rate(checked);
+      final plain = _input(top: RatingTop.flannel, topColor: _red);
+      expect(result.components.first.label, 'Color and pattern coordination');
+      expect(result.suggestions.join(' '), contains('repeats a color'));
+      expect(result.score, greaterThan(rater.rate(plain).score));
+      expect(result.outfit.id, isNot(plain.toOutfit().id));
+      final restored = OutfitRecommendation.fromJson(result.outfit.toJson());
+      expect(restored.topDetails.type, GarmentType.flannel);
+      expect(restored.topDetails.pattern, GarmentPattern.checks);
+      expect(restored.topDetails.accentColors.map((color) => color.argb), [
+        _navy.argb,
+        _white.argb,
+      ]);
+    },
+  );
+
+  test(
+    'patterned pants support a plain top and explain competing patterns',
+    () {
+      const pants = GarmentDetails(
+        type: GarmentType.trousers,
+        pattern: GarmentPattern.checks,
+        accentColors: [_white],
+      );
+      final calm = rater.rate(_input(pantsDetails: pants));
+      final mixed = rater.rate(
+        _input(
+          pantsDetails: pants,
+          topDetails: const GarmentDetails(pattern: GarmentPattern.stripes),
+        ),
+      );
+      expect(calm.suggestions.join(' '), contains('solid top'));
+      expect(
+        calm.components.first.score,
+        greaterThan(mixed.components.first.score),
+      );
+      expect(mixed.suggestions.join(' '), contains('vary their scale'));
+      expect(mixed.score, inInclusiveRange(0, 5));
+    },
+  );
+
+  test(
+    'T-shirt and flannel categories differ from a dress shirt for formal events',
+    () {
+      final shirt = rater.rate(_input(occasion: Occasion.special));
+      for (final top in [RatingTop.tee, RatingTop.flannel]) {
+        final relaxed = rater.rate(
+          _input(top: top, occasion: Occasion.special),
+        );
+        expect(
+          relaxed.components[1].score,
+          lessThan(shirt.components[1].score),
+        );
+        expect(relaxed.outfit.topDetails.type, top.garmentType);
+      }
+    },
+  );
 
   test('scores are finite and bounded across every garment and occasion', () {
     for (final occasion in Occasion.values) {

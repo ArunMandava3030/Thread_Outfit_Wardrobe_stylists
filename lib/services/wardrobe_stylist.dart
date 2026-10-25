@@ -20,6 +20,13 @@ class WardrobeStylist {
     // fashion items as ownership of required riding equipment.
     if (outfit.occasion == Occasion.bikeRide) return const {};
     final pieces = <WardrobeCategory, OutfitPiece>{
+      if (outfit.startingPiece == StartingPiece.pants)
+        WardrobeCategory.shirt: OutfitPiece(
+          category: 'Top',
+          title: outfit.shirtTitle,
+          colorName: outfit.shirt.name,
+          colorArgb: outfit.shirt.argb,
+        ),
       WardrobeCategory.pants: outfit.pants,
       WardrobeCategory.shoes: outfit.shoes,
       if (outfit.layer.colorArgb != 0) WardrobeCategory.layer: outfit.layer,
@@ -30,6 +37,12 @@ class WardrobeStylist {
       var closest = 12.0;
       for (final item in items) {
         if (item.category != entry.key) continue;
+        final expectedDetails = switch (entry.key) {
+          WardrobeCategory.shirt => outfit.topDetails,
+          WardrobeCategory.pants => outfit.pantsDetails,
+          _ => const GarmentDetails(),
+        };
+        if (!_compatibleDetails(expectedDetails, item.details)) continue;
         final lab = _lab(item.colorArgb);
         final delta = math.sqrt(
           math.pow(target.$1 - lab.$1, 2) +
@@ -43,6 +56,34 @@ class WardrobeStylist {
       }
     }
     return Map.unmodifiable(matches);
+  }
+
+  bool _compatibleDetails(GarmentDetails expected, GarmentDetails owned) {
+    // Old wardrobe entries were color-only. Continue treating them as possible
+    // color matches, without inventing type or pattern information.
+    if (!owned.isSpecified) return true;
+    if (expected.type != null &&
+        owned.type != null &&
+        expected.type != owned.type) {
+      return false;
+    }
+    // A plain recommendation must not count a known checked/printed garment as
+    // its match, even if the stored dominant color is identical.
+    if (expected.pattern != owned.pattern) return false;
+    if (expected.accentColors.isEmpty || owned.accentColors.isEmpty) {
+      return true;
+    }
+    return expected.accentColors.every(
+      (expectedColor) => owned.accentColors.any((ownedColor) {
+        final a = _lab(expectedColor.argb), b = _lab(ownedColor.argb);
+        return math.sqrt(
+              math.pow(a.$1 - b.$1, 2) +
+                  math.pow(a.$2 - b.$2, 2) +
+                  math.pow(a.$3 - b.$3, 2),
+            ) <
+            12;
+      }),
+    );
   }
 
   /// Stable ranking: equal color coverage keeps the existing adaptive ordering.

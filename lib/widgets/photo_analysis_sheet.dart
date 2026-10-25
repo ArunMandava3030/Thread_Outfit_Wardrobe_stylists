@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../models/style_models.dart';
 import '../services/auto_photo_analyzer.dart';
+import '../services/garment_palette_analyzer.dart';
 import '../services/photo_analyzer.dart';
 
 /// Local pose-based estimates with visible user confirmation and guided edits.
@@ -18,6 +19,7 @@ class PhotoAnalysisSheet extends StatefulWidget {
     this.sampleSkin = false,
     this.measureBody = false,
     this.garmentLabel,
+    this.allowPalette = true,
   }) : assert(!(sampleSkin && measureBody));
 
   final Uint8List bytes;
@@ -27,6 +29,9 @@ class PhotoAnalysisSheet extends StatefulWidget {
   /// A named garment uses a deliberate tap sample; torso detection stays for
   /// the original shirt flow and is never mislabeled as pants or shoes.
   final String? garmentLabel;
+
+  /// Multi-colour sampling is offered only for garments, never skin or body.
+  final bool allowPalette;
 
   @override
   State<PhotoAnalysisSheet> createState() => _PhotoAnalysisSheetState();
@@ -58,6 +63,17 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
   BodyShape? _autoBody;
   List<Offset> _autoBodyPoints = [];
   var _manualRevision = 0;
+  bool _paletteMode = false;
+  bool _readingPalette = false;
+  final List<Offset> _palettePoints = [];
+  List<ShirtColor> _garmentPalette = const [];
+
+  bool get _canReadPalette =>
+      widget.allowPalette && !widget.sampleSkin && !widget.measureBody;
+
+  Rect? get _garmentRect => _palettePoints.length == 2
+      ? Rect.fromPoints(_palettePoints.first, _palettePoints.last)
+      : null;
 
   @override
   void initState() {
@@ -160,8 +176,12 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
     final photo = _image;
     final pixels = _rgba;
     if (photo == null || pixels == null || _analyzing) return;
-    final revision = _manualRevision;
+    final revision = ++_manualRevision;
     setState(() {
+      _paletteMode = false;
+      _palettePoints.clear();
+      _garmentPalette = const [];
+      _readingPalette = false;
       _analyzing = true;
       _autoMessage = null;
     });
@@ -242,6 +262,22 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
     );
     if (pixel == null) return;
     final point = Offset(pixel.x.toDouble(), pixel.y.toDouble());
+    if (_paletteMode) {
+      setState(() {
+        _manualRevision++;
+        _readingPalette = false;
+        _automaticSelection = false;
+        _autoMessage = null;
+        _sampledArgb = null;
+        _samplePoint = null;
+        _garmentPalette = const [];
+        _tapHint = null;
+        if (_palettePoints.length == 2) _palettePoints.clear();
+        _palettePoints.add(point);
+      });
+      if (_palettePoints.length == 2) unawaited(_readPalette());
+      return;
+    }
     if (widget.measureBody) {
       if (_points.length >= 6) return;
       setState(() {
@@ -266,6 +302,9 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
       _manualRevision++;
       _automaticSelection = false;
       _autoMessage = null;
+      _garmentPalette = const [];
+      _sampledArgb = sampled;
+      _samplePoint = sampled == null ? null : point;
       if (sampled == null) {
         _tapHint = 'That area is transparent. Tap a visible part of the photo.';
       } else {
@@ -276,7 +315,70 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
     });
   }
 
+  void _setPaletteMode(bool enabled) {
+    setState(() {
+      _manualRevision++;
+      _paletteMode = enabled;
+      _readingPalette = false;
+      _palettePoints.clear();
+      _garmentPalette = const [];
+      _sampledArgb = null;
+      _samplePoint = null;
+      _automaticSelection = false;
+      _autoMessage = null;
+      _tapHint = null;
+    });
+  }
+
+  Future<void> _readPalette() async {
+    final photo = _image;
+    final rgba = _rgba;
+    final region = _garmentRect;
+    if (photo == null || rgba == null || region == null) return;
+    if (region.width < 2 || region.height < 2) {
+      setState(() => _tapHint = 'Choose opposite corners of a wider area.');
+      return;
+    }
+    final revision = _manualRevision;
+    setState(() => _readingPalette = true);
+    try {
+      // Let the progress indicator render before bounded local quantization.
+      await Future<void>.delayed(Duration.zero);
+      if (!mounted || revision != _manualRevision) return;
+      final swatches = await const GarmentPaletteAnalyzer().analyze(
+        rgba: rgba,
+        width: photo.width,
+        height: photo.height,
+        left: region.left.toInt(),
+        top: region.top.toInt(),
+        right: region.right.toInt() + 1,
+        bottom: region.bottom.toInt() + 1,
+      );
+      if (!mounted || revision != _manualRevision) return;
+      setState(() {
+        _garmentPalette = swatches.map((swatch) => swatch.color).toList();
+        _sampledArgb = _garmentPalette.firstOrNull?.argb;
+        _tapHint = _garmentPalette.isEmpty
+            ? 'No opaque colours found. Select another garment area.'
+            : null;
+      });
+    } catch (_) {
+      if (mounted && revision == _manualRevision) {
+        setState(() {
+          _garmentPalette = const [];
+          _sampledArgb = null;
+          _tapHint = 'The colours could not be read. Select another area.';
+        });
+      }
+    } finally {
+      if (mounted && revision == _manualRevision) {
+        setState(() => _readingPalette = false);
+      }
+    }
+  }
+
   void _confirm() {
+    if (_analyzing || _readingPalette) return;
     if (widget.measureBody) {
       final shape = _bodyShape;
       if (shape == null) return;
@@ -289,6 +391,11 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
             ? PhotoAnalysisResult(skinToneArgb: argb)
             : PhotoAnalysisResult(
                 shirtColor: PhotoAnalyzer.shirtColorFor(argb),
+                garmentPalette: [
+                  if (_garmentPalette.isNotEmpty)
+                    PhotoAnalyzer.shirtColorFor(argb),
+                  ..._garmentPalette.where((color) => color.argb != argb),
+                ],
               ),
       );
     }
@@ -297,9 +404,10 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final ready = widget.measureBody
-        ? _bodyShape != null
-        : _sampledArgb != null;
+    final ready =
+        !_analyzing &&
+        !_readingPalette &&
+        (widget.measureBody ? _bodyShape != null : _sampledArgb != null);
     return Container(
       height: MediaQuery.sizeOf(context).height * 0.9,
       decoration: const BoxDecoration(
@@ -351,6 +459,48 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
                   ),
                 ),
                 const SizedBox(height: 14),
+                if (_canReadPalette && _error == null) ...[
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      if (!_paletteMode)
+                        OutlinedButton.icon(
+                          key: const Key('read_garment_palette'),
+                          onPressed: _image == null
+                              ? null
+                              : () => _setPaletteMode(true),
+                          icon: const Icon(Icons.palette_outlined, size: 18),
+                          label: const Text('Read multiple colors'),
+                        )
+                      else ...[
+                        OutlinedButton.icon(
+                          key: const Key('redo_garment_region'),
+                          onPressed: () => _setPaletteMode(true),
+                          icon: const Icon(Icons.crop_free_rounded, size: 18),
+                          label: const Text('Select another area'),
+                        ),
+                        TextButton(
+                          key: const Key('single_garment_color'),
+                          onPressed: () => _setPaletteMode(false),
+                          child: const Text('Single color'),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (_paletteMode)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        _palettePoints.isEmpty
+                            ? 'Tap one corner of an area entirely inside the garment.'
+                            : _palettePoints.length == 1
+                            ? 'Tap the opposite corner. Include the pattern colors; keep skin and background outside.'
+                            : 'Only this rectangle is sampled. Choose your main color below. You can confirm the pattern separately.',
+                        style: textTheme.bodyMedium?.copyWith(color: _ink),
+                      ),
+                    ),
+                ],
                 SizedBox(
                   height: (MediaQuery.sizeOf(context).height * 0.4).clamp(
                     160.0,
@@ -360,7 +510,7 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
                 ),
                 const SizedBox(height: 14),
                 if (_error == null) ...[
-                  if (widget.garmentLabel == null)
+                  if (widget.garmentLabel == null && !_paletteMode)
                     Row(
                       children: [
                         Expanded(
@@ -394,7 +544,7 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
                         ],
                       ],
                     ),
-                  if (_analyzing) ...[
+                  if (_analyzing || _readingPalette) ...[
                     const SizedBox(height: 6),
                     const LinearProgressIndicator(color: _green),
                   ],
@@ -410,11 +560,35 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
                   ],
                   const SizedBox(height: 12),
                   _selection(textTheme),
+                  if (_garmentPalette.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final color in _garmentPalette)
+                          ChoiceChip(
+                            key: ValueKey('garment_swatch_${color.argb}'),
+                            selected: _sampledArgb == color.argb,
+                            onSelected: _readingPalette
+                                ? null
+                                : (_) =>
+                                      setState(() => _sampledArgb = color.argb),
+                            avatar: CircleAvatar(
+                              backgroundColor: Color(color.argb),
+                            ),
+                            label: Text(color.name),
+                          ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   Text(
                     widget.measureBody
                         ? 'A rough styling guide. Pose, clothing and perspective '
                               'affect the result. You can change it in your profile.'
+                        : _paletteMode
+                        ? 'Colors are read on this device. Garment type and pattern are chosen by you.'
                         : 'Sampled on this device. Lighting affects colour; '
                               'you can adjust your selection later.',
                     style: textTheme.bodySmall?.copyWith(
@@ -439,6 +613,8 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
                         ? 'Use these proportions'
                         : widget.sampleSkin
                         ? 'Use this skin tone'
+                        : _garmentPalette.isNotEmpty
+                        ? 'Use these colors'
                         : 'Use this ${widget.garmentLabel ?? 'shirt'} colour',
                   ),
                 ),
@@ -479,6 +655,7 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
                   ? 'Photo. Tap the indicated body edges.'
                   : 'Photo. Tap an area to sample its colour.',
               child: GestureDetector(
+                key: const Key('photo_sample_canvas'),
                 behavior: HitTestBehavior.opaque,
                 onTapDown: (details) => _onTap(details.localPosition, size),
                 child: CustomPaint(
@@ -487,8 +664,11 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
                     photo: photo,
                     points: widget.measureBody
                         ? (_points.isEmpty ? _autoBodyPoints : List.of(_points))
+                        : _paletteMode
+                        ? List.of(_palettePoints)
                         : [if (_samplePoint != null) _samplePoint!],
                     numbered: widget.measureBody && _points.isNotEmpty,
+                    region: _paletteMode ? _garmentRect : null,
                   ),
                 ),
               ),
@@ -567,7 +747,9 @@ class _PhotoAnalysisSheetState extends State<PhotoAnalysisSheet> {
           child: Text(
             _tapHint ??
                 (argb == null
-                    ? 'Tap the photo to choose a colour'
+                    ? _paletteMode
+                          ? 'Select two corners to read the garment colors'
+                          : 'Tap the photo to choose a colour'
                     : widget.sampleSkin
                     ? 'Your selected skin tone'
                     : '${_automaticSelection ? 'Estimated colour' : 'Closest colour'}: ${PhotoAnalyzer.shirtColorFor(argb).name}'),
@@ -592,11 +774,13 @@ class _PhotoPainter extends CustomPainter {
     required this.photo,
     required this.points,
     required this.numbered,
+    this.region,
   });
 
   final ui.Image photo;
   final List<Offset> points;
   final bool numbered;
+  final Rect? region;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -619,6 +803,29 @@ class _PhotoPainter extends CustomPainter {
           ),
         )
         .toList();
+    if (region != null) {
+      final selected = Rect.fromLTRB(
+        rect.left + region!.left / photo.width * rect.width,
+        rect.top + region!.top / photo.height * rect.height,
+        rect.left + (region!.right + 1) / photo.width * rect.width,
+        rect.top + (region!.bottom + 1) / photo.height * rect.height,
+      );
+      canvas.drawRect(selected, Paint()..color = const Color(0x22334D3D));
+      canvas.drawRect(
+        selected,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3,
+      );
+      canvas.drawRect(
+        selected,
+        Paint()
+          ..color = const Color(0xFF334D3D)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
+    }
     if (numbered) {
       for (var index = 0; index + 1 < positions.length; index += 2) {
         canvas.drawLine(
@@ -672,6 +879,7 @@ class _PhotoPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _PhotoPainter oldDelegate) =>
       photo != oldDelegate.photo ||
+      region != oldDelegate.region ||
       numbered != oldDelegate.numbered ||
       !listEquals(points, oldDelegate.points);
 }

@@ -11,13 +11,18 @@ class StyleEngine {
     required StartingPiece startingPiece,
     required ShirtColor color,
     StyleProfile? profile,
+    GarmentDetails details = const GarmentDetails(),
   }) {
-    final matches = _palettesFor(color)
+    var matches = _palettesFor(color)
         .map(
           (palette) =>
               ShirtColor(name: palette.pants.name, argb: palette.pants.argb),
         )
         .toList();
+    if (details.pattern != GarmentPattern.solid ||
+        details.accentColors.isNotEmpty) {
+      matches = _patternMatches(color, details, matches);
+    }
     // Only tops sit beside the face. Opt-in contrast preferences can reorder
     // these options, but never exclude a color or change a user's selection.
     if (startingPiece == StartingPiece.pants &&
@@ -46,11 +51,20 @@ class StyleEngine {
     required Occasion occasion,
     required StyleProfile profile,
     bool includeLayer = true,
+    GarmentDetails details = const GarmentDetails(),
   }) {
+    // Invalid cross-category types from a future/edited backup cannot turn a
+    // shirt into trousers. Preserve its confirmed pattern and palette.
+    final anchor =
+        details.type != null &&
+            details.type!.isTop != (startingPiece == StartingPiece.shirt)
+        ? details.copyWith(type: null)
+        : details;
     final matches = matchingColors(
       startingPiece: startingPiece,
       color: color,
       profile: profile,
+      details: anchor,
     );
     return List.unmodifiable(
       List.generate(3, (index) {
@@ -64,44 +78,295 @@ class StyleEngine {
           includeLayer: includeLayer,
         )[index];
         final anchoredPants = startingPiece == StartingPiece.pants;
+        final hasPattern =
+            anchor.pattern != GarmentPattern.solid ||
+            anchor.accentColors.isNotEmpty;
+        final companionTitle = anchor.isSpecified
+            ? _companionTitle(
+                anchor.type,
+                startingPiece,
+                occasion,
+                index,
+                anchoredPants ? _topTitles[occasion]![index] : base.pants.title,
+              )
+            : (anchoredPants ? _topTitles[occasion]![index] : base.pants.title);
+        final plainCompanion = hasPattern && occasion != Occasion.bikeRide
+            ? _plainTitle(companionTitle)
+            : companionTitle;
+        final ownedTitle = anchor.isSpecified
+            ? 'Your ${anchor.summary(startingPiece).toLowerCase()}'
+            : anchoredPants
+            ? 'Your pants'
+            : 'Your shirt';
         final pants = OutfitPiece(
           category: 'Pants',
-          title: anchoredPants ? 'Your pants' : base.pants.title,
+          title: anchoredPants ? ownedTitle : plainCompanion,
           colorName: bottom.name,
           colorArgb: bottom.argb,
         );
-        final shirtTitle = anchoredPants
-            ? _topTitles[occasion]![index]
-            : 'Your shirt';
+        final shirtTitle = anchoredPants ? plainCompanion : ownedTitle;
+        final companionDetails = anchor.isSpecified
+            ? GarmentDetails(
+                type: _typeFromTitle(companionTitle, isTop: anchoredPants),
+              )
+            : const GarmentDetails();
+        final layer =
+            hasPattern &&
+                base.layer.colorArgb != 0 &&
+                occasion != Occasion.bikeRide
+            ? OutfitPiece(
+                category: base.layer.category,
+                title: _plainTitle(base.layer.title),
+                colorName: base.layer.colorName,
+                colorArgb: base.layer.colorArgb,
+              )
+            : base.layer;
         final reasons = <String>[
           anchoredPants
               ? '${top.name} on top pairs with the ${bottom.name.toLowerCase()} pants you are keeping.'
-              : '${bottom.name} pants pair with the ${top.name.toLowerCase()} shirt you are keeping.',
+              : '${bottom.name} pants pair with the ${top.name.toLowerCase()} top you are keeping.',
           ...base.reasons.skip(1),
+          if (hasPattern)
+            'Let your ${anchor.pattern == GarmentPattern.solid ? 'multi-color palette' : anchor.pattern.label.toLowerCase()} lead: keep the other garment and optional layer plain. Echo one color from the garment or choose a quiet neutral.',
+          if (anchor.accentColors.isNotEmpty)
+            'Your palette keeps ${color.name} with ${anchor.accentColors.map((accent) => accent.name).join(', ')}; the companion does not need to contrast with every color.',
+          if (anchor.type != null && occasion != Occasion.bikeRide)
+            _typeReason(anchor.type!, occasion),
           if (matchingColor != null)
             'Your selected top and pants colors stay the same across these finishing options.',
           if (anchoredPants && occasion == Occasion.bikeRide)
-            'Keep these pants only if they are certified motorcycle trousers; the color alone does not tell us whether they offer riding protection.',
+            'Keep these pants only if they are certified motorcycle trousers; the color, type and pattern alone do not tell us whether they offer riding protection.',
         ];
         return OutfitRecommendation(
-          id: '${base.id}-from-${startingPiece.name}-${bottom.hex.substring(1)}',
+          id:
+              '${base.id}-from-${startingPiece.name}-${bottom.hex.substring(1)}'
+              '${anchor.isSpecified ? '-garment-${anchor.signature}' : ''}',
           title: base.title,
-          description: anchoredPants
+          description: anchor.isSpecified
+              ? 'Keep your ${color.name.toLowerCase()} ${anchor.summary(startingPiece).toLowerCase()} and finish the look for your ${occasion.label.toLowerCase()}.'
+              : anchoredPants
               ? 'Keep your ${bottom.name.toLowerCase()} pants and finish the look for your ${occasion.label.toLowerCase()}.'
               : base.description,
           occasion: occasion,
           shirt: top,
           shirtTitle: shirtTitle,
           startingPiece: startingPiece,
+          topDetails: anchoredPants ? companionDetails : anchor,
+          pantsDetails: anchoredPants ? anchor : companionDetails,
           pants: pants,
           shoes: base.shoes,
-          layer: base.layer,
+          layer: layer,
           reasons: List.unmodifiable(reasons),
           fitAdvice: base.fitAdvice,
           safetyNote: base.safetyNote,
         );
       }),
     );
+  }
+
+  List<ShirtColor> _patternMatches(
+    ShirtColor base,
+    GarmentDetails details,
+    List<ShirtColor> fallback,
+  ) {
+    final result = <ShirtColor>[];
+    void add(ShirtColor color) {
+      if (!result.any((existing) => existing.argb == color.argb)) {
+        result.add(color);
+      }
+    }
+
+    // Echo a real secondary color, preferring a subdued accent if available.
+    // Do not average colors: red/blue checks should not become a purple shirt.
+    final accents = details.accentColors
+        .where((c) => c.argb != base.argb)
+        .toList();
+    if (accents.isNotEmpty) {
+      accents.sort(
+        (a, b) => _Rgb(a.argb).saturation.compareTo(_Rgb(b.argb).saturation),
+      );
+      add(accents.first);
+    }
+    for (final candidate in fallback) {
+      if (_Rgb(candidate.argb).saturation < .22) add(candidate);
+    }
+    for (final color in const [_navy, _ecru, _charcoal, _stone]) {
+      add(ShirtColor(name: color.name, argb: color.argb));
+    }
+    return result.take(3).toList();
+  }
+
+  String _companionTitle(
+    GarmentType? type,
+    StartingPiece startingPiece,
+    Occasion occasion,
+    int index,
+    String fallback,
+  ) {
+    if (occasion == Occasion.bikeRide || type == null) return fallback;
+    if (startingPiece == StartingPiece.shirt) {
+      if (occasion == Occasion.special) return 'Tailored dress trousers';
+      if (occasion == Occasion.office) {
+        return type == GarmentType.flannel || type == GarmentType.tShirt
+            ? const [
+                'Straight-leg chinos',
+                'Tailored trousers',
+                'Pleated trousers',
+              ][index]
+            : const [
+                'Tailored trousers',
+                'Straight-leg chinos',
+                'Pleated trousers',
+              ][index];
+      }
+      if (occasion == Occasion.beach) {
+        return type == GarmentType.tShirt || type == GarmentType.polo
+            ? const ['Cotton shorts', 'Linen trousers', 'Chino shorts'][index]
+            : const [
+                'Linen trousers',
+                'Cotton shorts',
+                'Linen drawstring trousers',
+              ][index];
+      }
+      final evening = occasion == Occasion.date || occasion == Occasion.party;
+      return switch (type) {
+        GarmentType.tShirt =>
+          evening
+              ? const [
+                  'Straight-leg chinos',
+                  'Tailored trousers',
+                  'Clean straight-leg jeans',
+                ][index]
+              : const [
+                  'Straight-leg jeans',
+                  'Relaxed chinos',
+                  'Tapered joggers',
+                ][index],
+        GarmentType.flannel =>
+          evening
+              ? const [
+                  'Straight-leg chinos',
+                  'Clean straight-leg jeans',
+                  'Tailored trousers',
+                ][index]
+              : const [
+                  'Straight-leg jeans',
+                  'Relaxed chinos',
+                  'Straight-leg denim',
+                ][index],
+        GarmentType.polo => const [
+          'Straight-leg chinos',
+          'Tailored trousers',
+          'Clean straight-leg jeans',
+        ][index],
+        GarmentType.knit => const [
+          'Relaxed tailored trousers',
+          'Straight-leg chinos',
+          'Straight-leg jeans',
+        ][index],
+        _ => const [
+          'Straight-leg chinos',
+          'Tailored trousers',
+          'Clean straight-leg jeans',
+        ][index],
+      };
+    }
+    if (occasion == Occasion.special) return 'Crisp dress shirt';
+    if (occasion == Occasion.office) {
+      return type == GarmentType.joggers
+          ? const [
+              'Fine-knit polo',
+              'Oxford shirt',
+              'Cotton button-down shirt',
+            ][index]
+          : const [
+              'Oxford shirt',
+              'Fine-knit polo',
+              'Cotton button-down shirt',
+            ][index];
+    }
+    if (occasion == Occasion.beach) {
+      return type == GarmentType.shorts || type == GarmentType.joggers
+          ? const [
+              'Breathable cotton T-shirt',
+              'Relaxed linen shirt',
+              'Cotton polo',
+            ][index]
+          : const [
+              'Relaxed linen shirt',
+              'Breathable cotton T-shirt',
+              'Cotton polo',
+            ][index];
+    }
+    if (occasion == Occasion.date || occasion == Occasion.party) {
+      return type == GarmentType.jeans || type == GarmentType.joggers
+          ? const [
+              'Open-collar shirt',
+              'Fine-knit polo',
+              'Fine-gauge knit',
+            ][index]
+          : const [
+              'Fine-knit polo',
+              'Open-collar shirt',
+              'Fine-gauge knit',
+            ][index];
+    }
+    return switch (type) {
+      GarmentType.jeans => const [
+        'Cotton T-shirt',
+        'Flannel shirt',
+        'Relaxed polo',
+      ][index],
+      GarmentType.chinos => const [
+        'Cotton polo',
+        'Oxford shirt',
+        'Cotton T-shirt',
+      ][index],
+      GarmentType.trousers => const [
+        'Fine-gauge knit',
+        'Cotton button-down shirt',
+        'Fine-knit polo',
+      ][index],
+      GarmentType.shorts => const [
+        'Breathable cotton T-shirt',
+        'Cotton polo',
+        'Relaxed linen shirt',
+      ][index],
+      GarmentType.joggers => const [
+        'Breathable cotton T-shirt',
+        'Relaxed knit',
+        'Cotton polo',
+      ][index],
+      _ => fallback,
+    };
+  }
+
+  String _typeReason(GarmentType type, Occasion occasion) {
+    final smart = occasion == Occasion.office || occasion == Occasion.special;
+    if (smart &&
+        const {
+          GarmentType.tShirt,
+          GarmentType.flannel,
+          GarmentType.shorts,
+          GarmentType.joggers,
+          GarmentType.jeans,
+        }.contains(type)) {
+      return 'Keep your ${type.label.toLowerCase()} if the dress code allows it; tailored companions add polish but do not make casual clothing formal.';
+    }
+    return switch (type) {
+      GarmentType.flannel =>
+        'Flannel brings soft texture; straightforward denim or chinos keep the other half easy. Checks are optional, not assumed from the fabric.',
+      GarmentType.tShirt =>
+        'A T-shirt pairs naturally with easy denim or chinos; a tailored option can dress it up for an evening.',
+      GarmentType.jeans =>
+        'Denim supports an easy T-shirt or a more structured top; keep the chosen wash and pattern as the anchor.',
+      GarmentType.joggers =>
+        'A clean, relaxed top works with joggers without pretending they are tailored trousers.',
+      GarmentType.shorts =>
+        'An airy top suits shorts; check that both pieces feel comfortable for the setting.',
+      _ =>
+        'The companion garment is chosen around your ${type.label.toLowerCase()} as well as the occasion.',
+    };
   }
 
   List<OutfitRecommendation> generate({
@@ -616,3 +881,35 @@ const _topTitles = <Occasion, List<String>>{
     'Comfortable base layer',
   ],
 };
+
+String _plainTitle(String title) =>
+    'Plain ${title.replaceAll(RegExp(r'[Tt]extured ?'), '').toLowerCase()}';
+
+GarmentType? _typeFromTitle(String title, {required bool isTop}) {
+  final text = title.toLowerCase();
+  // Fashion categories cannot represent the certification requirement. Leave
+  // riding metadata unset so downstream editors use the protective title.
+  if (text.contains('motorcycle') ||
+      text.contains('riding') ||
+      text.contains('protective')) {
+    return null;
+  }
+  if (isTop) {
+    if (text.contains('t-shirt')) return GarmentType.tShirt;
+    if (text.contains('polo')) return GarmentType.polo;
+    if (text.contains('flannel')) return GarmentType.flannel;
+    if (text.contains('knit')) return GarmentType.knit;
+    if (text.contains('shirt')) return GarmentType.shirt;
+  } else {
+    if (text.contains('shorts')) return GarmentType.shorts;
+    if (text.contains('jeans') || text.contains('denim')) {
+      return GarmentType.jeans;
+    }
+    if (text.contains('chino')) return GarmentType.chinos;
+    if (text.contains('jogger') || text.contains('track')) {
+      return GarmentType.joggers;
+    }
+    if (text.contains('trouser')) return GarmentType.trousers;
+  }
+  return null;
+}

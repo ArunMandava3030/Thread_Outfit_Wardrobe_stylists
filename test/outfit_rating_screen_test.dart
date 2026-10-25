@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:thread_style/models/style_models.dart';
+import 'package:thread_style/models/outfit_rating_models.dart';
 import 'package:thread_style/models/trend_models.dart';
 import 'package:thread_style/screens/outfit_rating_screen.dart';
 import 'package:thread_style/services/trend_service.dart';
+import 'package:thread_style/services/style_engine.dart';
 import 'package:thread_style/theme.dart';
 
 class _DeferredTrends extends TrendService {
@@ -22,6 +24,7 @@ Future<void> _pump(
   Size viewport = const Size(390, 844),
   Future<ShirtColor?> Function(String)? onPickColor,
   TrendService? trendService,
+  OutfitRecommendation? initialOutfit,
 }) async {
   tester.view.physicalSize = viewport;
   tester.view.devicePixelRatio = 1;
@@ -46,6 +49,7 @@ Future<void> _pump(
                 onFavorite: onFavorite,
                 onPickColor: onPickColor,
                 trendService: trendService,
+                initialOutfit: initialOutfit,
               ),
             ),
           ),
@@ -63,6 +67,112 @@ Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
+  testWidgets('specified top on a bike ride keeps protective pants in rating', (
+    tester,
+  ) async {
+    final initial = const StyleEngine()
+        .generateForItem(
+          startingPiece: StartingPiece.shirt,
+          color: ShirtColor.presets[12],
+          matchingColor: ShirtColor.presets[2],
+          details: const GarmentDetails(
+            type: GarmentType.flannel,
+            pattern: GarmentPattern.checks,
+          ),
+          occasion: Occasion.bikeRide,
+          profile: const StyleProfile(),
+        )
+        .first;
+    OutfitRecommendation? saved;
+    await _pump(
+      tester,
+      initialOutfit: initial,
+      onFavorite: (value) async => saved = value,
+    );
+    expect(find.textContaining('Motorcycle trousers'), findsOneWidget);
+    await _tapVisible(tester, find.byKey(const Key('rate_current_outfit')));
+    await _tapVisible(tester, find.byKey(const Key('favorite_rated_outfit')));
+    expect(saved?.pants.title, 'Motorcycle trousers');
+    expect(saved?.pantsDetails.type, isNull);
+    expect(
+      saved?.reasons.join(' '),
+      contains('protection has not been verified'),
+    );
+  });
+
+  testWidgets('saved pattern metadata prefills and survives rating favorite', (
+    tester,
+  ) async {
+    final initial = OutfitRatingInput(
+      top: RatingTop.flannel,
+      topColor: ShirtColor.presets[12],
+      pantsColor: ShirtColor.presets[2],
+      shoesColor: ShirtColor.presets[3],
+      layerColor: ShirtColor.presets[4],
+      topDetails: GarmentDetails(
+        pattern: GarmentPattern.checks,
+        accentColors: [ShirtColor.presets[2], ShirtColor.presets[3]],
+      ),
+    ).toOutfit();
+    OutfitRecommendation? saved;
+    await _pump(
+      tester,
+      initialOutfit: initial,
+      onFavorite: (value) async => saved = value,
+    );
+    expect(find.text('Red · Flannel shirt'), findsOneWidget);
+    expect(find.textContaining('Checks / plaid · Navy, White'), findsOneWidget);
+    await _tapVisible(tester, find.byKey(const Key('rate_current_outfit')));
+    await _tapVisible(tester, find.byKey(const Key('favorite_rated_outfit')));
+    expect(saved?.topDetails.type, GarmentType.flannel);
+    expect(saved?.topDetails.pattern, GarmentPattern.checks);
+    expect(saved?.topDetails.accentColors, hasLength(2));
+    expect(saved?.id, initial.id);
+  });
+
+  testWidgets(
+    'pattern edits stay inside garment editor and cancel discards them',
+    (tester) async {
+      OutfitRecommendation? saved;
+      await _pump(
+        tester,
+        scale: 1.6,
+        viewport: const Size(320, 800),
+        onFavorite: (value) async => saved = value,
+      );
+      expect(find.byKey(const Key('garment_pattern_checks')), findsNothing);
+      await _tapVisible(tester, find.byKey(const Key('rating-edit-Pants')));
+      await _tapVisible(
+        tester,
+        find.byKey(const Key('garment_pattern_checks')),
+      );
+      await _tapVisible(
+        tester,
+        find.byKey(const Key('garment_accent_White_fff4f2eb')),
+      );
+      await _tapVisible(tester, find.byKey(const Key('rating-editor-cancel')));
+      await _tapVisible(tester, find.byKey(const Key('rate_current_outfit')));
+      await _tapVisible(tester, find.byKey(const Key('favorite_rated_outfit')));
+      expect(saved?.pantsDetails.pattern, GarmentPattern.solid);
+      await _tapVisible(tester, find.byKey(const Key('rating_edit_outfit')));
+      await _tapVisible(tester, find.byKey(const Key('rating-edit-Pants')));
+      await _tapVisible(
+        tester,
+        find.byKey(const Key('garment_pattern_checks')),
+      );
+      await _tapVisible(
+        tester,
+        find.byKey(const Key('garment_accent_White_fff4f2eb')),
+      );
+      await _tapVisible(tester, find.byKey(const Key('rating-editor-done')));
+      await _tapVisible(tester, find.byKey(const Key('rate_current_outfit')));
+      await _tapVisible(tester, find.byKey(const Key('favorite_rated_outfit')));
+      expect(saved?.pantsDetails.pattern, GarmentPattern.checks);
+      expect(saved?.pantsDetails.accentColors.single.name, 'White');
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('basic rating fits on a phone without opening extra options', (
     tester,
   ) async {

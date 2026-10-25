@@ -7,6 +7,7 @@ import 'services/style_direction_stylist.dart';
 import 'services/style_engine.dart';
 import 'theme.dart';
 import 'widgets/garment_art.dart';
+import 'widgets/garment_details_editor.dart';
 import 'widgets/trend_panel.dart';
 
 /// A session-only public preview. Its entrypoint never opens a profile store or
@@ -38,6 +39,7 @@ class _GuestStudioState extends State<_GuestStudio> {
   StartingPiece _startingPiece = StartingPiece.shirt;
   ShirtColor _color = ShirtColor.presets.first;
   ShirtColor? _matchingColor;
+  GarmentDetails _details = const GarmentDetails();
   int _step = 0;
   Occasion _occasion = Occasion.casual;
   StyleDirection _direction = StyleDirection.everyday;
@@ -69,7 +71,11 @@ class _GuestStudioState extends State<_GuestStudio> {
     setState(() {
       if (step == 1 && _matchingColor == null) {
         _matchingColor = const StyleEngine()
-            .matchingColors(startingPiece: _startingPiece, color: _color)
+            .matchingColors(
+              startingPiece: _startingPiece,
+              color: _color,
+              details: _details,
+            )
             .first;
       }
       _step = step;
@@ -101,6 +107,7 @@ class _GuestStudioState extends State<_GuestStudio> {
     final candidates = const StyleEngine().generateForItem(
       startingPiece: _startingPiece,
       color: _color,
+      details: _details,
       matchingColor: _matchingColor,
       occasion: _occasion,
       profile: StyleProfile(heightCm: height ?? 175),
@@ -369,7 +376,10 @@ class _GuestStudioState extends State<_GuestStudio> {
                 selected: _startingPiece == item,
                 onSelected: (_) {
                   if (_startingPiece != item) {
-                    _changeStartingItem(() => _startingPiece = item);
+                    _changeStartingItem(() {
+                      _startingPiece = item;
+                      _details = const GarmentDetails();
+                    });
                   }
                 },
               ),
@@ -383,13 +393,34 @@ class _GuestStudioState extends State<_GuestStudio> {
                   ? GarmentKind.shirt
                   : GarmentKind.pants,
               color: Color(_color.argb),
+              details: _details,
               size: 90,
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                '${_color.name} ${_startingPiece.itemLabel.toLowerCase()}',
-                style: Theme.of(context).textTheme.titleMedium,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${_color.name} ${_startingPiece.itemLabel.toLowerCase()}',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  TextButton.icon(
+                    key: const Key('guest_garment_details'),
+                    onPressed: _editDetails,
+                    icon: const Icon(Icons.tune, size: 18),
+                    label: Text(
+                      _details.isSpecified
+                          ? _details.summary(_startingPiece)
+                          : 'Type & pattern',
+                    ),
+                  ),
+                  if (_details.accentColors.isNotEmpty)
+                    Text(
+                      'Also ${_details.accentColors.map((color) => color.name).join(', ')}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                ],
               ),
             ),
           ],
@@ -410,7 +441,10 @@ class _GuestStudioState extends State<_GuestStudio> {
                     key: Key('guest_color_${color.name}'),
                     onTap: () {
                       if (_color.argb != color.argb) {
-                        _changeStartingItem(() => _color = color);
+                        _changeStartingItem(() {
+                          _color = color;
+                          _details = _details.copyWith(accentColors: const []);
+                        });
                       }
                     },
                     borderRadius: BorderRadius.circular(24),
@@ -452,10 +486,22 @@ class _GuestStudioState extends State<_GuestStudio> {
     ),
   );
 
+  Future<void> _editDetails() async {
+    final details = await showGarmentDetailsEditor(
+      context,
+      startingPiece: _startingPiece,
+      initial: _details,
+      mainColor: _color,
+    );
+    if (!mounted || details == null) return;
+    _changeStartingItem(() => _details = details);
+  }
+
   Widget _matchingPanel() {
     final suggestions = const StyleEngine().matchingColors(
       startingPiece: _startingPiece,
       color: _color,
+      details: _details,
     );
     return SurfaceCard(
       child: Column(
@@ -479,6 +525,7 @@ class _GuestStudioState extends State<_GuestStudio> {
                     ? GarmentKind.shirt
                     : GarmentKind.pants,
                 label: 'Your ${_startingPiece.itemLabel.toLowerCase()}',
+                details: _details,
               ),
               if (_matchingColor != null)
                 _garmentPreview(
@@ -544,11 +591,17 @@ class _GuestStudioState extends State<_GuestStudio> {
     required ShirtColor color,
     required GarmentKind kind,
     required String label,
+    GarmentDetails details = const GarmentDetails(),
   }) => SizedBox(
     width: 100,
     child: Column(
       children: [
-        GarmentArt(kind: kind, color: Color(color.argb), size: 80),
+        GarmentArt(
+          kind: kind,
+          color: Color(color.argb),
+          size: 80,
+          details: details,
+        ),
         Text(label, textAlign: TextAlign.center),
         Text(
           color.name,
@@ -704,6 +757,8 @@ class GuestOutfitCard extends StatelessWidget {
           shoes: Color(outfit.shoes.colorArgb),
           layer: Color(outfit.layer.colorArgb),
           height: 175,
+          topDetails: outfit.topDetails,
+          pantsDetails: outfit.pantsDetails,
         ),
         Text(outfit.title, style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 20),
@@ -717,7 +772,17 @@ class GuestOutfitCard extends StatelessWidget {
           outfit.pants,
           outfit.shoes,
           outfit.layer,
-        ]) ...[_piece(piece), const SizedBox(height: 14)],
+        ]) ...[
+          _piece(
+            piece,
+            details: piece.category == 'Top'
+                ? outfit.topDetails
+                : piece.category == 'Pants'
+                ? outfit.pantsDetails
+                : null,
+          ),
+          const SizedBox(height: 14),
+        ],
         Theme(
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
@@ -765,7 +830,7 @@ class GuestOutfitCard extends StatelessWidget {
     ),
   );
 
-  Widget _piece(OutfitPiece piece) => Row(
+  Widget _piece(OutfitPiece piece, {GarmentDetails? details}) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Container(
@@ -790,6 +855,12 @@ class GuestOutfitCard extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             Text(piece.title),
+            if (details != null &&
+                (details.pattern != GarmentPattern.solid ||
+                    details.accentColors.isNotEmpty))
+              Text(
+                '${details.pattern == GarmentPattern.solid ? 'Multicolor' : details.pattern.label}${details.accentColors.isEmpty ? '' : ' · ${details.accentColors.map((color) => color.name).join(', ')}'}',
+              ),
           ],
         ),
       ),

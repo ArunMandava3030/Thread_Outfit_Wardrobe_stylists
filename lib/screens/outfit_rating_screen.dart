@@ -9,6 +9,7 @@ import '../models/trend_models.dart';
 import '../services/outfit_rater.dart';
 import '../services/trend_service.dart';
 import '../theme.dart';
+import '../widgets/garment_details_editor.dart';
 
 class OutfitRatingScreen extends StatefulWidget {
   const OutfitRatingScreen({
@@ -45,6 +46,8 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
   RatingBottom _bottom = RatingBottom.chinos;
   RatingShoes _shoes = RatingShoes.sneakers;
   RatingLayer _layer = RatingLayer.none;
+  GarmentDetails _topDetails = const GarmentDetails();
+  GarmentDetails _pantsDetails = const GarmentDetails();
   Occasion _occasion = Occasion.casual;
   StyleDirection _direction = StyleDirection.everyday;
   DressExpectation _dress = DressExpectation.occasionDefault;
@@ -104,8 +107,12 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
       argb: outfit.shoes.colorArgb,
     );
     _occasion = outfit.occasion;
+    _topDetails = outfit.topDetails;
+    _pantsDetails = outfit.pantsDetails;
     final top = outfit.shirtTitle.toLowerCase();
-    _top = top.contains('polo')
+    _top = top.contains('flannel')
+        ? RatingTop.flannel
+        : top.contains('polo')
         ? RatingTop.polo
         : top.contains('knit')
         ? RatingTop.knit
@@ -124,6 +131,23 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
         : bottom.contains('track') || bottom.contains('jogger')
         ? RatingBottom.track
         : RatingBottom.chinos;
+    // Saved metadata takes precedence over older titles when available.
+    _top = switch (_topDetails.type) {
+      GarmentType.shirt => RatingTop.shirt,
+      GarmentType.tShirt => RatingTop.tee,
+      GarmentType.polo => RatingTop.polo,
+      GarmentType.flannel => RatingTop.flannel,
+      GarmentType.knit => RatingTop.knit,
+      _ => _top,
+    };
+    _bottom = switch (_pantsDetails.type) {
+      GarmentType.jeans => RatingBottom.jeans,
+      GarmentType.chinos => RatingBottom.chinos,
+      GarmentType.trousers => RatingBottom.tailored,
+      GarmentType.shorts => RatingBottom.shorts,
+      GarmentType.joggers => RatingBottom.track,
+      _ => _bottom,
+    };
     final shoes = outfit.shoes.title.toLowerCase();
     _shoes = shoes.contains('motorcycle') || shoes.contains('riding')
         ? RatingShoes.riding
@@ -193,6 +217,8 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
     layerColor: _layerColor,
     top: _top,
     bottom: _bottom,
+    topDetails: _topDetails,
+    pantsDetails: _pantsDetails,
     shoes: _shoes,
     layer: _layer,
     occasion: _occasion,
@@ -330,11 +356,14 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
                   types: RatingTop.values,
                   name: (value) => value.label,
                   color: _topColor,
-                  onDone: (type, color) => _edit(() {
+                  details: _topDetails,
+                  onDone: (type, color, details) => _edit(() {
                     _top = type;
                     _topColor = color;
+                    _topDetails = details.copyWith(type: type.garmentType);
                   }),
                 ),
+                details: _topDetails,
               ),
               const Divider(height: 1),
               _garmentRow(
@@ -348,11 +377,14 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
                   types: RatingBottom.values,
                   name: (value) => value.label,
                   color: _pantsColor,
-                  onDone: (type, color) => _edit(() {
+                  details: _pantsDetails,
+                  onDone: (type, color, details) => _edit(() {
                     _bottom = type;
                     _pantsColor = color;
+                    _pantsDetails = details.copyWith(type: type.garmentType);
                   }),
                 ),
+                details: _pantsDetails,
               ),
               const Divider(height: 1),
               _garmentRow(
@@ -366,7 +398,7 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
                   types: RatingShoes.values,
                   name: (value) => value.label,
                   color: _shoesColor,
-                  onDone: (type, color) => _edit(() {
+                  onDone: (type, color, _) => _edit(() {
                     _shoes = type;
                     _shoesColor = color;
                   }),
@@ -385,7 +417,7 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
                   name: (value) => value.label,
                   color: _layerColor,
                   hasColor: (value) => value != RatingLayer.none,
-                  onDone: (type, color) => _edit(() {
+                  onDone: (type, color, _) => _edit(() {
                     _layer = type;
                     _layerColor = color;
                   }),
@@ -520,8 +552,9 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
     String label,
     String type,
     ShirtColor? color,
-    VoidCallback onEdit,
-  ) => Row(
+    VoidCallback onEdit, {
+    GarmentDetails? details,
+  }) => Row(
     children: [
       Container(
         width: 28,
@@ -546,6 +579,13 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
                 key: ValueKey('rating-summary-$label'),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
+              if (details != null &&
+                  (details.pattern != GarmentPattern.solid ||
+                      details.accentColors.isNotEmpty))
+                Text(
+                  '${details.pattern == GarmentPattern.solid ? 'Multicolor' : details.pattern.label}${details.accentColors.isEmpty ? '' : ' · ${details.accentColors.map((color) => color.name).join(', ')}'}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
             ],
           ),
         ),
@@ -565,11 +605,13 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
     required List<T> types,
     required String Function(T) name,
     required ShirtColor color,
-    required void Function(T, ShirtColor) onDone,
+    required void Function(T, ShirtColor, GarmentDetails) onDone,
+    GarmentDetails? details,
     bool Function(T)? hasColor,
   }) async {
     var draftType = type;
     var draftColor = color;
+    var draftDetails = details ?? const GarmentDetails();
     var picking = false;
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
@@ -639,8 +681,14 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
                                       backgroundColor: Color(preset.argb),
                                     ),
                                     selected: draftColor.argb == preset.argb,
-                                    onSelected: (_) =>
-                                        updateSheet(() => draftColor = preset),
+                                    onSelected: (_) => updateSheet(() {
+                                      if (draftColor.argb != preset.argb) {
+                                        draftDetails = draftDetails.copyWith(
+                                          accentColors: const [],
+                                        );
+                                      }
+                                      draftColor = preset;
+                                    }),
                                   ),
                               ],
                             ),
@@ -657,6 +705,13 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
                                         updateSheet(() {
                                           picking = false;
                                           if (sampled != null) {
+                                            if (draftColor.argb !=
+                                                sampled.argb) {
+                                              draftDetails = draftDetails
+                                                  .copyWith(
+                                                    accentColors: const [],
+                                                  );
+                                            }
                                             draftColor = sampled;
                                           }
                                         });
@@ -673,7 +728,16 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
                               ),
                               const SizedBox(height: 4),
                               const Text(
-                                'Photo sampling reads color. Choose the garment type above.',
+                                'Photo sampling reads color. Confirm the clothing type and pattern yourself.',
+                              ),
+                            ],
+                            if (details != null) ...[
+                              const SizedBox(height: 20),
+                              GarmentPatternFields(
+                                details: draftDetails,
+                                mainColor: draftColor,
+                                onChanged: (value) =>
+                                    updateSheet(() => draftDetails = value),
                               ),
                             ],
                           ],
@@ -700,7 +764,9 @@ class _OutfitRatingScreenState extends State<OutfitRatingScreen> {
         ),
       ),
     );
-    if (mounted && confirmed == true) onDone(draftType, draftColor);
+    if (mounted && confirmed == true) {
+      onDone(draftType, draftColor, draftDetails);
+    }
   }
 
   Widget _dropdown<T extends Enum>(

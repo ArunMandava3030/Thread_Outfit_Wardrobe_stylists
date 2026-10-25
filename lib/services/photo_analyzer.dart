@@ -9,11 +9,16 @@ class PhotoAnalysisResult {
     this.shirtColor,
     this.skinToneArgb,
     this.bodyShape,
+    this.garmentPalette = const [],
   });
 
   final ShirtColor? shirtColor;
   final int? skinToneArgb;
   final BodyShape? bodyShape;
+
+  /// Only populated after the user deliberately selects a garment region.
+  /// The confirmed main colour comes first; no fabric/pattern is inferred.
+  final List<ShirtColor> garmentPalette;
 }
 
 /// Local image helpers. These do not detect a person or infer measurements.

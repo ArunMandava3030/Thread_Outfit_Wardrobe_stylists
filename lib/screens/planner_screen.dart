@@ -117,6 +117,8 @@ class _PlanCard extends StatelessWidget {
         pants: Color(outfit.pants.colorArgb),
         shoes: Color(outfit.shoes.colorArgb),
         layer: Color(outfit.layer.colorArgb),
+        topDetails: outfit.topDetails,
+        pantsDetails: outfit.pantsDetails,
         height: 145,
       ),
     );
@@ -132,8 +134,12 @@ class _PlanCard extends StatelessWidget {
         const SizedBox(height: 10),
         Text(outfit.title, style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 8),
-        Text('${outfit.shirt.name} shirt'),
-        Text('${outfit.pants.colorName} ${outfit.pants.title}'),
+        Text(
+          '${outfit.shirt.name} ${outfit.shirtTitle}${_garmentNotes(outfit.topDetails)}',
+        ),
+        Text(
+          '${outfit.pants.colorName} ${outfit.pants.title}${_garmentNotes(outfit.pantsDetails)}',
+        ),
         Text('${outfit.shoes.colorName} ${outfit.shoes.title}'),
         if (outfit.layer.colorArgb != 0)
           Text('${outfit.layer.colorName} ${outfit.layer.title}'),
@@ -360,3 +366,11 @@ class _PlanOutfitDialogState extends State<_PlanOutfitDialog> {
     ],
   );
 }
+
+String _garmentNotes(GarmentDetails details) =>
+    '${details.pattern != GarmentPattern.solid
+        ? ' · ${details.pattern.label}'
+        : details.accentColors.isNotEmpty
+        ? ' · Multicolor'
+        : ''}'
+    '${details.accentColors.isEmpty ? '' : ' · ${details.accentColors.map((color) => color.name).join(' + ')} accents'}';

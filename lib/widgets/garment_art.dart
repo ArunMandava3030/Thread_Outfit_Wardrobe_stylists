@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show listEquals;
+import '../models/style_models.dart';
 
 enum GarmentKind { shirt, pants, shoes, jacket }
 
@@ -9,21 +11,85 @@ class GarmentArt extends StatelessWidget {
     required this.kind,
     required this.color,
     this.size = 130,
+    this.details = const GarmentDetails(),
   });
   final GarmentKind kind;
   final Color color;
   final double size;
+  final GarmentDetails details;
   @override
   Widget build(BuildContext context) => SizedBox.square(
     dimension: size,
-    child: CustomPaint(painter: _GarmentPainter(kind, color)),
+    child: CustomPaint(painter: _GarmentPainter(kind, color, details)),
   );
 }
 
 class _GarmentPainter extends CustomPainter {
-  _GarmentPainter(this.kind, this.color);
+  _GarmentPainter(this.kind, this.color, this.details);
   final GarmentKind kind;
   final Color color;
+  final GarmentDetails details;
+
+  void _pattern(Canvas canvas, Path shape) {
+    if (details.pattern == GarmentPattern.solid) return;
+    final accents = details.accentColors.map((c) => Color(c.argb)).toList();
+    final contrast = color.computeLuminance() > .4
+        ? const Color(0xFF26382F)
+        : const Color(0xFFF2EFE5);
+    final first = accents.isEmpty ? contrast : accents.first;
+    final second = accents.length > 1 ? accents[1] : first;
+    canvas.save();
+    canvas.clipPath(shape);
+    switch (details.pattern) {
+      case GarmentPattern.solid:
+        break;
+      case GarmentPattern.checks:
+        for (double p = 0; p < 160; p += 24) {
+          canvas.drawRect(
+            Rect.fromLTWH(p, 0, 10, 160),
+            Paint()..color = first.withValues(alpha: .65),
+          );
+          canvas.drawRect(
+            Rect.fromLTWH(0, p, 160, 9),
+            Paint()..color = second.withValues(alpha: .65),
+          );
+        }
+      case GarmentPattern.stripes:
+        for (double p = 0; p < 160; p += 17) {
+          canvas.drawRect(
+            Rect.fromLTWH(0, p, 160, 5),
+            Paint()..color = first.withValues(alpha: .8),
+          );
+        }
+      case GarmentPattern.print:
+        for (double x = 20; x < 145; x += 26) {
+          for (double y = 20; y < 150; y += 25) {
+            canvas.drawCircle(
+              Offset(x, y),
+              3.5,
+              Paint()..color = first.withValues(alpha: .85),
+            );
+            canvas.drawCircle(
+              Offset(x + 8, y + 8),
+              2.5,
+              Paint()..color = second.withValues(alpha: .85),
+            );
+          }
+        }
+      case GarmentPattern.colorBlock:
+        canvas.drawRect(
+          const Rect.fromLTWH(0, 60, 160, 45),
+          Paint()..color = first,
+        );
+        if (accents.length > 1) {
+          canvas.drawRect(
+            const Rect.fromLTWH(0, 105, 160, 55),
+            Paint()..color = second,
+          );
+        }
+    }
+    canvas.restore();
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -40,17 +106,25 @@ class _GarmentPainter extends CustomPainter {
       case GarmentKind.shirt:
       case GarmentKind.jacket:
         final jacket = kind == GarmentKind.jacket;
+        final crew =
+            !jacket &&
+            (details.type == GarmentType.tShirt ||
+                details.type == GarmentType.knit);
+        final longSleeve =
+            jacket ||
+            details.type == GarmentType.flannel ||
+            details.type == GarmentType.knit;
         shape = Path()
           ..moveTo(57, 20)
           ..lineTo(36, 28)
-          ..lineTo(jacket ? 13 : 17, jacket ? 121 : 63)
-          ..lineTo(jacket ? 34 : 40, jacket ? 127 : 75)
+          ..lineTo(longSleeve ? 13 : 17, longSleeve ? 121 : 63)
+          ..lineTo(longSleeve ? 34 : 40, longSleeve ? 127 : 75)
           ..lineTo(44, 59)
           ..lineTo(42, 137)
           ..quadraticBezierTo(80, 144, 118, 137)
           ..lineTo(116, 59)
-          ..lineTo(jacket ? 126 : 120, jacket ? 127 : 75)
-          ..lineTo(jacket ? 147 : 143, jacket ? 121 : 63)
+          ..lineTo(longSleeve ? 126 : 120, longSleeve ? 127 : 75)
+          ..lineTo(longSleeve ? 147 : 143, longSleeve ? 121 : 63)
           ..lineTo(124, 28)
           ..lineTo(103, 20)
           ..quadraticBezierTo(80, 31, 57, 20)
@@ -62,7 +136,17 @@ class _GarmentPainter extends CustomPainter {
           false,
         );
         canvas.drawPath(shape, fill);
+        _pattern(canvas, shape);
         canvas.drawPath(shape, seam);
+        if (crew) {
+          canvas.drawPath(
+            Path()
+              ..moveTo(57, 20)
+              ..quadraticBezierTo(80, 56, 103, 20),
+            seam,
+          );
+          break;
+        }
         canvas.drawPath(
           Path()
             ..moveTo(57, 20)
@@ -100,17 +184,19 @@ class _GarmentPainter extends CustomPainter {
         }
         break;
       case GarmentKind.pants:
+        final shorts = details.type == GarmentType.shorts;
         shape = Path()
           ..moveTo(43, 16)
           ..lineTo(117, 16)
-          ..lineTo(125, 141)
-          ..lineTo(91, 144)
+          ..lineTo(shorts ? 122 : 125, shorts ? 93 : 141)
+          ..lineTo(91, shorts ? 94 : 144)
           ..lineTo(80, 65)
-          ..lineTo(69, 144)
-          ..lineTo(35, 141)
+          ..lineTo(69, shorts ? 94 : 144)
+          ..lineTo(shorts ? 38 : 35, shorts ? 93 : 141)
           ..close();
         canvas.drawShadow(shape, Colors.black.withValues(alpha: .16), 4, false);
         canvas.drawPath(shape, fill);
+        _pattern(canvas, shape);
         canvas.drawPath(shape, seam);
         canvas.drawLine(const Offset(43, 26), const Offset(117, 26), seam);
         canvas.drawPath(
@@ -135,10 +221,14 @@ class _GarmentPainter extends CustomPainter {
         );
         canvas.drawLine(
           const Offset(57, 60),
-          const Offset(52, 135),
+          Offset(52, shorts ? 88 : 135),
           seam..color = seam.color.withValues(alpha: .3),
         );
-        canvas.drawLine(const Offset(103, 60), const Offset(108, 135), seam);
+        canvas.drawLine(
+          const Offset(103, 60),
+          Offset(108, shorts ? 88 : 135),
+          seam,
+        );
         break;
       case GarmentKind.shoes:
         for (var i = 0; i < 2; i++) {
@@ -187,7 +277,13 @@ class _GarmentPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_GarmentPainter oldDelegate) =>
-      oldDelegate.kind != kind || oldDelegate.color != color;
+      oldDelegate.kind != kind ||
+      oldDelegate.color != color ||
+      oldDelegate.details.signature != details.signature ||
+      !listEquals(
+        oldDelegate.details.accentColors.map((c) => c.argb).toList(),
+        details.accentColors.map((c) => c.argb).toList(),
+      );
 }
 
 class OutfitArt extends StatelessWidget {
@@ -198,10 +294,13 @@ class OutfitArt extends StatelessWidget {
     required this.shoes,
     this.layer,
     this.height = 240,
+    this.topDetails = const GarmentDetails(),
+    this.pantsDetails = const GarmentDetails(),
   });
   final Color shirt, pants, shoes;
   final Color? layer;
   final double height;
+  final GarmentDetails topDetails, pantsDetails;
   @override
   Widget build(BuildContext context) => SizedBox(
     height: height,
@@ -221,6 +320,7 @@ class OutfitArt extends StatelessWidget {
                 child: GarmentArt(
                   kind: GarmentKind.shirt,
                   color: shirt,
+                  details: topDetails,
                   size: 153 * scale,
                 ),
               ),
@@ -233,6 +333,7 @@ class OutfitArt extends StatelessWidget {
                 child: GarmentArt(
                   kind: GarmentKind.pants,
                   color: pants,
+                  details: pantsDetails,
                   size: 161 * scale,
                 ),
               ),

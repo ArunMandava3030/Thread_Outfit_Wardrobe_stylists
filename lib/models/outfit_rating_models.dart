@@ -5,11 +5,20 @@ import 'trend_models.dart';
 enum RatingTop {
   tee('T-shirt'),
   shirt('Button-up shirt'),
+  flannel('Flannel shirt'),
   polo('Polo shirt'),
   knit('Knit top');
 
   const RatingTop(this.label);
   final String label;
+
+  GarmentType get garmentType => switch (this) {
+    tee => GarmentType.tShirt,
+    shirt => GarmentType.shirt,
+    flannel => GarmentType.flannel,
+    polo => GarmentType.polo,
+    knit => GarmentType.knit,
+  };
 }
 
 enum RatingBottom {
@@ -22,6 +31,15 @@ enum RatingBottom {
 
   const RatingBottom(this.label);
   final String label;
+
+  GarmentType? get garmentType => switch (this) {
+    jeans => GarmentType.jeans,
+    chinos => GarmentType.chinos,
+    tailored => GarmentType.trousers,
+    shorts => GarmentType.shorts,
+    track => GarmentType.joggers,
+    riding => null,
+  };
 }
 
 enum RatingShoes {
@@ -102,6 +120,8 @@ class OutfitRatingInput {
     this.hem = TrouserHem.unknown,
     this.silhouette = SilhouetteFit.unknown,
     this.includeTrends = false,
+    this.topDetails = const GarmentDetails(),
+    this.pantsDetails = const GarmentDetails(),
   });
 
   final ShirtColor topColor, pantsColor, shoesColor, layerColor;
@@ -116,6 +136,7 @@ class OutfitRatingInput {
   final TrouserHem hem;
   final SilhouetteFit silhouette;
   final bool includeTrends;
+  final GarmentDetails topDetails, pantsDetails;
 
   bool get hasLayer => layer != RatingLayer.none;
   int get fitObservationCount =>
@@ -139,6 +160,12 @@ class OutfitRatingInput {
       shoesColor.argb.toRadixString(16),
       layer.name,
       if (hasLayer) layerColor.argb.toRadixString(16),
+      if (topDetails.pattern != GarmentPattern.solid ||
+          topDetails.accentColors.isNotEmpty)
+        topDetails.copyWith(type: top.garmentType).signature,
+      if (pantsDetails.pattern != GarmentPattern.solid ||
+          pantsDetails.accentColors.isNotEmpty)
+        pantsDetails.copyWith(type: bottom.garmentType).signature,
     ].join('-');
     return OutfitRecommendation(
       id: 'rated-$signature',
@@ -148,6 +175,8 @@ class OutfitRatingInput {
       occasion: occasion,
       shirt: topColor,
       shirtTitle: top.label,
+      topDetails: topDetails.copyWith(type: top.garmentType),
+      pantsDetails: pantsDetails.copyWith(type: bottom.garmentType),
       pants: OutfitPiece(
         category: 'Pants',
         title: bottom.label,

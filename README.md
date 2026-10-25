@@ -1,6 +1,6 @@
 # Thread
 
-A Flutter outfit companion for a men's wardrobe. Start with the shirt or pants you are already wearing, choose a complementary color, then dress the pairing for your occasion. Compare three finishing options, favorite a look, or rate an outfit you are wearing with an explained 0–5 styling estimate. Personalize recommendations with likes and dislikes, explore style guides and headlines, dress for current weather, and organize your wardrobe and outfit plans.
+A Flutter outfit companion for a men's wardrobe. Start with the shirt or pants you are already wearing, confirm its type, pattern and colors, then dress the pairing for your occasion. Compare three finishing options, favorite a look, or rate an outfit you are wearing with an explained 0–5 styling estimate. Personalize recommendations with likes and dislikes, explore style guides and headlines, dress for current weather, and organize your wardrobe and outfit plans.
 
 [Try the web preview](https://arunmandava3030.github.io/Thread_Outfit_Wardrobe_stylists/) · [Android downloads](https://github.com/ArunMandava3030/Thread_Outfit_Wardrobe_stylists/releases) · [Mobile build guide](docs/mobile-builds.md)
 
@@ -26,7 +26,7 @@ Then open http://127.0.0.1:8080. Flutter 3.35.7 / Dart 3.9.2 was used here. Comm
 
 ## Using the app
 
-1. In **Outfits**, choose **Shirt first** or **Pants first**, then choose its color or **Use a photo**. Shirt photos retain automatic torso sampling with manual correction. Pants photos use an explicit tap on the pants.
+1. In **Outfits**, choose **Shirt first** or **Pants first**, then choose its color or **Use a photo**. Optional garment details distinguish a T-shirt, shirt, polo, flannel or knit, and jeans, chinos, tailored trousers, shorts or joggers. Confirm solid, checks/plaid, stripes, print/graphic or color block, with accent colors where needed. Shirt photos retain automatic torso sampling with manual correction; pants photos use an explicit tap. **Read multiple colors** lets you select a garment rectangle and confirm its palette.
 2. A suggested matching color is already selected. Keep it, tap another suggestion, or open **More colors**, then continue. Back retains your choices; changing the starting item selects a fresh recommendation the next time you continue.
 3. Choose your occasion and whether to include a layer, then **Show my outfit**. One suggested look appears first; **Show 2 more outfits** reveals alternatives. Both chosen colors and the starting garment remain fixed.
 4. **Favorite outfit** saves the look under **Saved**. **Outfit details** groups rating, planning, feedback and explanations. Your existing profile, favorites, votes, wardrobe and plans remain compatible.
@@ -35,9 +35,31 @@ Then open http://127.0.0.1:8080. Flutter 3.35.7 / Dart 3.9.2 was used here. Comm
 7. Open **More options** in the outfit builder for styles, current weather, learning and dated fashion headlines. In the public preview, optional style, height and headlines are under **Style and fit (optional)** on the occasion step.
 8. In **Wardrobe**, **Wear this shirt** or **Wear these pants** starts from an owned item. **Plan look** stores an outfit for a date and optional note; **Planner** manages these snapshots. Android Back returns to the previous outfit step or the More menu before leaving the app.
 
+## Patterns, garment types and photo palettes
+
+Garment details let the recommendation engine consider the kind of clothing and its main/accent colors in either direction. A checked flannel and a plain T-shirt can therefore receive different companion garments even when their main color is the same. Flannel is a garment/fabric choice, separate from the pattern: it can be solid or patterned. The garment already worn stays fixed; suggested companion colors and garment types are adapted around it and the chosen occasion. These are explainable styling rules, not proof that one combination is universally better.
+
+For a multicolor garment, open its photo and choose **Read multiple colors**. Tap two opposite corners of an area entirely inside that garment, including representative pattern colors while excluding skin and background. The selected rectangle is drawn over the photo. Choose the main swatch, then **Use these colors**; **Select another area** and **Single color** allow corrections. The automatic torso sample and ordinary single taps still return one color. Skin-tone and body-proportion flows do not offer garment palettes.
+
+Palette extraction runs locally using **Material Color Utilities 0.11.1**, [Google's Apache-2.0 color library](https://github.com/material-foundation/material-color-utilities). Its [Dart Celebi quantizer](https://github.com/material-foundation/material-color-utilities/blob/main/dart/lib/quantize/quantizer_celebi.dart) groups at most 4,096 sampled opaque pixels from the chosen rectangle. Thread merges nearby Lab shades, keeps up to three representative colors ordered by sampled population, and places the user's confirmed main color first in the result. Black and white are retained; no skin mask, background removal or garment segmentation is implied. Swatch names describe nearby presets without replacing the extracted RGB values. The library is used as a package dependency, with its [Apache-2.0 license and Google copyright notice](https://github.com/material-foundation/material-color-utilities/blob/main/LICENSE) retained in Flutter's dependency license collection.
+
+**Types and patterns are confirmed by the user.** Color extraction does not recognize checks, identify fabric, or decide whether a pictured item is a T-shirt. Wrinkles, shadows, small selected areas and lighting can affect the palette. New selections invalidate old results; late asynchronous results cannot overwrite a correction. Photos are not uploaded for this feature. The public storage-free preview accepts garment details and colors manually; local photo analysis remains in the full app.
+
+### Open-source recognition options evaluated
+
+The following projects were researched in October 2026 as possible future classifiers. They are **not bundled or called by Thread**. A model's product-retrieval benchmark is not a measurement of checks/flannel recognition in worn-garment photos; a separate labeled evaluation and mobile runtime checks are needed before enabling automatic labels.
+
+| Project | Published license and size | Integration assessment |
+| --- | --- | --- |
+| [Marqo FashionSigLIP](https://github.com/marqo-ai/marqo-FashionCLIP) | [Code Apache-2.0](https://github.com/marqo-ai/marqo-FashionCLIP/blob/main/LICENSE); the publisher's [model card](https://huggingface.co/Marqo/marqo-fashionSigLIP) also declares Apache-2.0. [Split ONNX vision exports](https://huggingface.co/Marqo/marqo-fashionSigLIP/tree/main/onnx) include 94 MB int8 and 61.2 MB q4 models. | Candidate for an optional on-device label suggestion. Fixed text-label embeddings could be prepared offline to avoid shipping a text encoder; this is an unimplemented proposal. Flutter runtime support, memory, latency and pattern accuracy remain unverified. |
+| [FashionCLIP](https://github.com/patrickjohncyh/fashion-clip) | [Code MIT](https://github.com/patrickjohncyh/fashion-clip/blob/master/LICENSE); the publisher's [model card](https://huggingface.co/patrickjohncyh/fashion-clip) declares MIT for the model. [Published weights](https://huggingface.co/patrickjohncyh/fashion-clip/tree/main) are about 605 MB, with an approximately 606 MB ONNX export. | Useful research baseline, but its authors describe a bias toward centered product photos on white backgrounds. It is not a drop-in TFLite garment detector. |
+| [MMFashion](https://github.com/open-mmlab/mmfashion) | Apache-2.0 source; underlying datasets/checkpoints require separate rights checks. The [DeepFashion agreement](https://mmlab.ie.cuhk.edu.hk/projects/DeepFashion.html) restricts its data to noncommercial research and restricts redistribution. | Reference for attributes, parsing and compatibility research. Its older Python/PyTorch stack and dataset conditions make it unsuitable for immediate bundling. |
+
+The Marqo and FashionCLIP weight repositories declare their licenses in model-card metadata rather than a separate license file; those declarations were checked independently from the code licenses. Apple MobileCLIP was also considered: its [code license](https://github.com/apple-aiml-research/ml-mobileclip/blob/main/LICENSE) is MIT, but its current [model license](https://github.com/apple-aiml-research/ml-mobileclip/blob/main/LICENSE_MODELS) limits the weights to noncommercial scientific research and explicitly excludes product development. Those checkpoints are not included. Free model downloads do not provide free production hosting; a server-based option would require a separate deployment and explicit photo-upload flow. Current trend headlines remain a separate dated discovery source, not knowledge automatically learned by these models.
+
 ## Outfit ratings
 
-The 0–5 result is a subjective styling estimate, not a validated prediction or an assessment of appearance or body quality. It scores selected color coordination and occasion/dress-code suitability. Optional comfort, hem clearance and preferred-silhouette observations add a fit component; measurements alone cannot establish whether a garment fits. Garment types must be confirmed by the user—photo color sampling does not recognize every item or its fit.
+The 0–5 result is a subjective styling estimate, not a validated prediction or an assessment of appearance or body quality. It scores selected color/pattern coordination and occasion/dress-code suitability. Optional comfort, hem clearance and preferred-silhouette observations add a fit component; measurements alone cannot establish whether a garment fits. Garment types and patterns must be confirmed by the user—photo color sampling does not recognize every item or its fit. Within the color component, a solid companion repeating a confirmed pattern accent adds 0.15; two patterned pieces subtract 0.35 for visual complexity, with an explanation that mixing patterns can be intentional.
 
 The rule score uses color coordination (45%), occasion (40%) and observed fit (15%); when fit is unknown, the first two weights are renormalized. The existing local preference model can adjust the result by at most ±0.25 points, with reduced influence when there are few votes. Top garment words are now included in its clothing features. Skin tone, shoulder proportions and height provide optional, constructive palette/fit advice and do not lower the numeric score.
 
@@ -62,7 +84,7 @@ Publish `build/guest`. For a site served at the domain root, use `--base-href /`
 
 ## Adaptive recommendations
 
-`AdaptiveStylist` is a local content-based preference model: logistic regression trained with deterministic stochastic gradient descent and L2 regularization. It learns from the latest **200 distinct outfits with explicit likes or dislikes**. Features describe garment words, RGB/chroma/lightness, color contrasts and layer presence, with shared and occasion-specific weights. Skin tone, body shape, height, outfit IDs and editorial descriptions are not learning features.
+`AdaptiveStylist` is a local content-based preference model: logistic regression trained with deterministic stochastic gradient descent and L2 regularization. It learns from the latest **200 distinct outfits with explicit likes or dislikes**. Features describe garment words, confirmed garment types/patterns and accent colors, RGB/chroma/lightness, color contrasts and layer presence, with shared and occasion-specific weights. Older votes without garment details stay valid and receive no invented garment labels. Skin tone, body shape, height, outfit IDs and editorial descriptions are not learning features.
 
 Each ranking is fitted from the latest votes. Repeating the same vote does not count twice; changing or undoing a vote removes its previous contribution. **Reset learning** clears feedback while retaining the wardrobe, planner and saved looks. With no feedback, the curated recommendation order is preserved. Learned scores are relative preferences, not validated probabilities or outfit-quality percentages.
 
@@ -126,6 +148,7 @@ flutter build web --release --no-web-resources-cdn --pwa-strategy=none
 - `lib/services/trend_service.dart` and `tool/update_trends.py`: validated headline snapshots and RSS ingestion.
 - `lib/screens/profile_screen.dart`: height, proportions and optional color profile.
 - `lib/services/photo_analyzer.dart`: pixel sampling, coordinate mapping and proportion classification.
+- `lib/services/garment_palette_analyzer.dart`: bounded, local multicolor extraction from an explicitly selected garment rectangle.
 - `lib/services/auto_photo_analyzer.dart` and `auto_pose_*`: platform inference, confidence/geometry gates, aspect-preserving model input and pose-guided sampling.
 - `web/vision/`: pinned local MediaPipe runtime, WASM, pose model, worker, licenses and model provenance.
 - `lib/services/style_engine.dart`: shirt palettes, occasions, personalized fit and accent choices.

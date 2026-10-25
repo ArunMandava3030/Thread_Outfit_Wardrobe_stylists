@@ -10,6 +10,145 @@ import 'package:thread_style/widgets/photo_analysis_sheet.dart';
 
 void main() {
   testWidgets(
+    'garment region extracts multiple colors and confirms chosen main first',
+    (tester) async {
+      _setPhoneViewport(tester);
+      final bytes = await tester.runAsync(_makeTwoColourPng);
+      PhotoAnalysisResult? result;
+      await _openSheet(
+        tester,
+        bytes: bytes!,
+        garmentLabel: 'shirt',
+        onResult: (value) => result = value,
+      );
+      await _tapVisible(tester, find.byKey(const Key('read_garment_palette')));
+      await _tapPhotoPoint(tester, const Offset(.05, .1));
+      expect(find.textContaining('Tap the opposite corner.'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Use this shirt colour'),
+            )
+            .onPressed,
+        isNull,
+      );
+      await _tapPhotoPoint(tester, const Offset(.95, .9));
+      // The second swatch is the photographed warm color, not a preset RGB.
+      final swatch = find.byWidgetPredicate(
+        (widget) =>
+            widget is ChoiceChip &&
+            widget.key == ValueKey('garment_swatch_${0xFFC1926B}'),
+      );
+      expect(swatch, findsOneWidget);
+      await _tapVisible(tester, swatch);
+      await _tapVisible(
+        tester,
+        find.widgetWithText(FilledButton, 'Use these colors'),
+      );
+      expect(result!.shirtColor!.argb, 0xFFC1926B);
+      expect(result!.garmentPalette.map((color) => color.argb), [
+        0xFFC1926B,
+        0xFF4279A6,
+      ]);
+      expect(result!.skinToneArgb, isNull);
+      expect(result!.bodyShape, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('redo and single color clear a previously extracted palette', (
+    tester,
+  ) async {
+    _setPhoneViewport(tester);
+    final bytes = await tester.runAsync(_makeTwoColourPng);
+    PhotoAnalysisResult? result;
+    await _openSheet(
+      tester,
+      bytes: bytes!,
+      garmentLabel: 'pants',
+      onResult: (value) => result = value,
+    );
+    await _tapVisible(tester, find.byKey(const Key('read_garment_palette')));
+    await _tapPhotoPoint(tester, const Offset(.05, .1));
+    await _tapPhotoPoint(tester, const Offset(.95, .9));
+    expect(find.byType(ChoiceChip), findsNWidgets(2));
+    await _tapVisible(tester, find.byKey(const Key('redo_garment_region')));
+    expect(find.byType(ChoiceChip), findsNothing);
+    final confirm = find.widgetWithText(FilledButton, 'Use this pants colour');
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+    await _tapPhotoPoint(tester, const Offset(.05, .1));
+    await _tapPhotoPoint(tester, const Offset(.45, .9));
+    expect(find.byType(ChoiceChip), findsOneWidget);
+    await _tapVisible(tester, find.byKey(const Key('single_garment_color')));
+    expect(find.byType(ChoiceChip), findsNothing);
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+    await _tapPhotoPoint(tester, const Offset(.75, .5));
+    await _tapVisible(tester, confirm);
+    expect(result!.shirtColor!.argb, 0xFFC1926B);
+    expect(result!.garmentPalette, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('palette is optional and absent for skin and body analysis', (
+    tester,
+  ) async {
+    _setPhoneViewport(tester);
+    final bytes = await tester.runAsync(_makeTwoColourPng);
+    for (final mode in ['disabled', 'skin', 'body']) {
+      await _openSheet(
+        tester,
+        bytes: bytes!,
+        onResult: (_) {},
+        garmentLabel: mode == 'disabled' ? 'shirt' : null,
+        allowPalette: mode != 'disabled',
+        sampleSkin: mode == 'skin',
+        measureBody: mode == 'body',
+      );
+      expect(find.byKey(const Key('read_garment_palette')), findsNothing);
+      await _tapVisible(tester, find.byTooltip('Close photo'));
+    }
+  });
+
+  testWidgets(
+    'starting another region invalidates the previous palette and rejects a line',
+    (tester) async {
+      _setPhoneViewport(tester);
+      final bytes = await tester.runAsync(_makeTwoColourPng);
+      await _openSheet(
+        tester,
+        bytes: bytes!,
+        garmentLabel: 'pants',
+        onResult: (_) {},
+      );
+      await _tapVisible(tester, find.byKey(const Key('read_garment_palette')));
+      await _tapPhotoPoint(tester, const Offset(.05, .1));
+      await _tapPhotoPoint(tester, const Offset(.95, .9));
+      expect(find.byType(ChoiceChip), findsNWidgets(2));
+      await _tapPhotoPoint(tester, const Offset(.2, .2));
+      expect(find.byType(ChoiceChip), findsNothing);
+      final confirm = find.widgetWithText(
+        FilledButton,
+        'Use this pants colour',
+      );
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+      await _tapPhotoPoint(tester, const Offset(.2, .7));
+      expect(
+        find.text('Choose opposite corners of a wider area.'),
+        findsOneWidget,
+      );
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+      await _tapPhotoPoint(tester, const Offset(.1, .2));
+      await _tapPhotoPoint(tester, const Offset(.4, .7));
+      expect(find.byType(ChoiceChip), findsOneWidget);
+      expect(
+        find.text('Choose opposite corners of a wider area.'),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'pants photo samples only the tapped garment with no torso auto estimate',
     (tester) async {
       _setPhoneViewport(tester);
@@ -219,6 +358,7 @@ Future<void> _openSheet(
   bool sampleSkin = false,
   bool measureBody = false,
   String? garmentLabel,
+  bool allowPalette = true,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -237,6 +377,7 @@ Future<void> _openSheet(
                     sampleSkin: sampleSkin,
                     measureBody: measureBody,
                     garmentLabel: garmentLabel,
+                    allowPalette: allowPalette,
                   ),
                 );
                 onResult(result);
